@@ -1,0 +1,650 @@
+:root {
+  /* ============================================
+   * 背景色 (暗い順)
+   * ============================================ */
+  --bg-app: rgb(17, 17, 17);
+  /* body 最背面 */
+  --bg-recessed: rgb(24, 24, 24);
+  /* 一段沈んだ背景: scrollbar track/corner, Ruler */
+  --bg-recessed-2: rgb(28, 28, 28);
+  /* Section内のList背景 */
+  --bg-panel: rgb(52, 52, 52);
+  /* Section, Select-options背景 (元50/52を統一) */
+  --bg-overlay-hover: rgb(85, 85, 85);
+  /* Select-optionsのホバー */
+  --bg-black: rgb(0, 0, 0);
+  /* resizer */
+  --bg-canvas: rgb(209, 209, 209);
+  /* JTag_Canvas (明るい背景、他系統とは無関係) */
+
+  /* ============================================
+   * テキスト / アイコン色 (明るい順)
+   * ============================================ */
+  --text-bright: rgb(230, 230, 230);
+  /* 選択中ラベル、visibilityホバー */
+  --text-primary: rgb(217, 217, 217);
+  /* Button/Input/Select文字色 (元210/217/222を統一) */
+  --text-secondary: rgb(204, 204, 204);
+  /* JTag_Text, Sectionタイトル, Hierarchyラベル */
+  --text-tertiary: rgb(181, 180, 180);
+  /* Label, Slider label, Hierarchyアイコン (元180/181を統一) */
+  --text-muted: rgb(148, 148, 148);
+  /* toggle, visibility, ruler目盛, 関係線 (元140/148/160を統一) */
+  --text-disabled: rgb(120, 120, 120);
+  /* disabled状態のラベル */
+
+  /* ============================================
+   * ボーダー
+   * ============================================ */
+  --border-default: rgb(93, 93, 93);
+  /* Select-optionsの枠線 */
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  /* Rulerの下線 */
+  --border-input: rgba(255, 255, 255, 0.205);
+  /* Sliderの数値入力欄 */
+
+  /* ============================================
+   * オーバーレイ(半透明白) ホバー等、アルファ段階順
+   * ============================================ */
+  --overlay-1: rgba(255, 255, 255, 0.06);
+  /* 行ホバー(弱) */
+  --overlay-2: rgba(255, 255, 255, 0.101);
+  /* Select背景 */
+  --overlay-3: rgba(255, 255, 255, 0.15);
+  /* スクロールバーつまみ */
+  --overlay-4: rgba(255, 255, 255, 0.165);
+  /* Buttonホバー */
+  --overlay-5: rgba(255, 255, 255, 0.25);
+  /* スクロールバーつまみホバー */
+  --overlay-black-1: rgba(0, 0, 0, 0.249);
+  /* Inputホバー/フォーカス背景 */
+
+  /* ============================================
+   * アクセント
+   * ============================================ */
+  --accent: azure;
+  /* Slider, アクティブアイコンなど */
+  --accent-selection: rgba(90, 160, 255, 0.25);
+  /* Hierarchy選択行のハイライト(青系) */
+}
+
+body {
+  width: 100vw;
+  height: 100vh;
+  user-select: none;
+  background-color: var(--bg-app);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--overlay-3) var(--bg-recessed);
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background-color: var(--bg-recessed);
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--overlay-3);
+  border-radius: 5px;
+  border: 2px solid var(--bg-recessed);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--overlay-5);
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background-color: var(--accent);
+}
+
+*::-webkit-scrollbar-corner {
+  background-color: var(--bg-recessed);
+}
+
+input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.resizer {
+  background-color: var(--bg-black);
+}
+
+.hidden {
+  display: none !important;
+}
+
+.JTag_Text {
+  color: var(--text-secondary);
+}
+
+.JTag_Base {}
+
+.JTag_Label {
+  white-space: nowrap;
+  color: var(--text-tertiary);
+  font-size: 90%;
+  font-weight: 50;
+}
+
+.JTag_Stack {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden !important;
+}
+
+.JTag_Stack>* {
+  position: absolute !important;
+}
+
+.JTag_Canvas {
+  width: 100%;
+  height: 100%;
+  background-color: var(--bg-canvas);
+}
+
+.JTag_ToolBar {
+  margin: 5px;
+  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden auto;
+  background-color: var(--bg-panel);
+  border-radius: 5px;
+  max-height: calc(100% - 5px - 5px);
+}
+
+.JTag_ToolBar>.children {
+  margin: 0px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 0px;
+  overflow-y: auto;
+}
+
+.JTag_ToolBar>.resizer {
+  cursor: row-resize;
+  height: 5px;
+  width: 100%;
+  position: absolute;
+  left: 0;
+  bottom: 0;
+}
+
+.JTag_Section {
+  margin: 5px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: var(--bg-panel);
+  border-radius: 5px;
+  position: relative;
+}
+
+.JTag_Section>.header {
+  margin: 0px 10px;
+  margin-top: 10px;
+}
+
+.JTag_Section>.header>.title {
+  font-size: 120%;
+  font-weight: 900;
+  color: var(--text-secondary);
+}
+
+.JTag_Section>.children {
+  margin: 0px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 0px;
+  overflow-y: auto;
+}
+
+.JTag_Section>.resizer {
+  cursor: row-resize;
+  height: 5px;
+  width: 100%;
+  position: absolute;
+  left: 0;
+  bottom: 0;
+}
+
+.JTag_Container {
+  /* margin: 5px; */
+  width: 100%;
+  height: 100%;
+}
+
+.JTag_Row {
+  display: grid;
+  grid-template-rows: 1fr 5px 1fr;
+  width: 100%;
+  height: 100%;
+}
+
+.JTag_Row>.resizer {
+  cursor: row-resize;
+}
+
+.JTag_Row>* {
+  overflow: hidden;
+  width: 100%;
+}
+
+.JTag_Column {
+  display: grid;
+  grid-template-columns: 1fr 5px 1fr;
+  width: 100%;
+  height: 100%;
+}
+
+.JTag_Column>.resizer {
+  cursor: col-resize;
+}
+
+.JTag_Column>* {
+  overflow: hidden;
+  height: 100%;
+}
+
+.JTag_List {
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+}
+
+.JTag_Section .JTag_List>.list {
+  border-radius: 5px;
+  background-color: var(--bg-recessed-2);
+}
+
+.JTag_List>.list {
+  flex: 1;
+  display: flex;
+  flex-flow: column;
+  height: 100%;
+  overflow: hidden auto;
+}
+
+.JTag_List>.actions {
+  display: flex;
+  flex-flow: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.JTag_List>.actions>button {
+  width: 40px;
+  height: 40px;
+  background-color: var(--overlay-2);
+  border-radius: 5px;
+  color: var(--text-primary);
+}
+
+.JTag_Hierarchy {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  padding: 5px;
+  overflow: hidden auto;
+}
+
+.JTag_HierarchyNode {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  position: relative;
+}
+
+/* 折りたたみ: data-open="false" の直下の.childrenを隠す */
+
+.JTag_HierarchyNode[data-open="false"]>.children {
+  display: none;
+}
+
+.JTag_HierarchyNode>.row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 22px;
+  min-height: 22px;
+  padding-right: 6px;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.JTag_HierarchyNode>.row:hover {
+  background-color: var(--overlay-1);
+}
+
+.JTag_HierarchyNode>.row.selected {
+  background-color: var(--accent-selection);
+}
+
+.JTag_HierarchyNode>.row.selected>.label {
+  color: var(--text-bright);
+}
+
+.JTag_HierarchyNode>.row>.toggle {
+  width: 14px;
+  height: 14px;
+  min-width: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.JTag_HierarchyNode>.row>.toggle>svg {
+  transition: transform 0.1s ease;
+  /* open状態の向き(下向き▼) */
+  transform: rotate(90deg);
+}
+
+.JTag_HierarchyNode[data-open="false"]>.row>.toggle>svg {
+  /* closed状態の向き(右向き▶) */
+  transform: rotate(0deg);
+}
+
+.JTag_HierarchyNode>.row>.toggle.empty {
+  visibility: hidden;
+}
+
+.JTag_HierarchyNode>.row>.icon {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+}
+
+.JTag_HierarchyNode>.row>.icon>svg {
+  width: 16px;
+  height: 16px;
+}
+
+.JTag_HierarchyNode>.row>.label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-secondary);
+  font-size: 90%;
+}
+
+.JTag_HierarchyNode.disabled>.row>.label {
+  color: var(--text-disabled);
+  font-style: italic;
+}
+
+.JTag_HierarchyNode>.row>.visibility {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  opacity: 0;
+}
+
+.JTag_HierarchyNode>.row:hover>.visibility,
+.JTag_HierarchyNode>.row>.visibility.active {
+  opacity: 1;
+}
+
+.JTag_HierarchyNode>.row>.visibility.active {
+  color: var(--accent);
+}
+
+.JTag_HierarchyNode>.row>.visibility:hover {
+  color: var(--text-bright);
+}
+
+/* ============================================
+* 子要素コンテナ: インデント + 関係線(コネクタ)
+* ============================================ */
+
+.JTag_HierarchyNode>.children {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+/* .children直下の各ノードにインデントを持たせる */
+.JTag_HierarchyNode>.children>.JTag_HierarchyNode {
+  padding-left: 20px;
+}
+
+/* 関係線縦 */
+.JTag_HierarchyNode>.children>.JTag_HierarchyNode::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: -7px;
+  /* bottom: 110%; */
+  height: calc(11px - -7px);
+  /* 行の高さ(22px)の半分 = 行中央まで */
+  width: 1px;
+  background-color: var(--text-muted);
+}
+
+/* 関係線横 */
+.JTag_HierarchyNode>.children>.JTag_HierarchyNode::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 11px;
+  width: 15px;
+  height: 1px;
+  background-color: var(--text-muted);
+}
+
+/* 最後の子でないノードは縦線を自分の行の下まで伸ばし、次の兄弟へ繋げる */
+.JTag_HierarchyNode>.children>.JTag_HierarchyNode:not(:last-child)::before {
+  height: 100%;
+}
+
+/* ルート直下(.JTag_Hierarchy直下)のノードにはコネクタもインデントも不要 */
+.JTag_Hierarchy>.JTag_HierarchyNode {
+  padding-left: 0;
+}
+
+.JTag_Hierarchy>.JTag_HierarchyNode::before,
+.JTag_Hierarchy>.JTag_HierarchyNode::after {
+  content: none;
+}
+
+.JTag_LayersTree {
+  max-height: 100%;
+  overflow: hidden auto;
+}
+
+.JTag_LayersTree>.children {
+  display: flex;
+  flex-flow: column;
+}
+
+.JTag_Button {
+  border-radius: 5px;
+  justify-content: left;
+  display: flex;
+  align-items: center;
+  padding: 3px;
+  gap: 3px;
+}
+
+.JTag_Button>* {
+  color: var(--text-primary);
+}
+
+.JTag_Button>.icon {
+  width: 20px;
+  height: 20px;
+}
+
+.JTag_Button>.icon>svg {
+  width: 20px;
+  height: 20px;
+}
+
+.JTag_Button:hover {
+  background-color: var(--overlay-4);
+}
+
+.JTag_Button>.text {
+  white-space: nowrap;
+}
+
+.JTag_Slider {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.JTag_Slider>label {
+  white-space: nowrap;
+  color: var(--text-tertiary);
+  padding: 4px 0;
+  font-size: 90%;
+  font-weight: 50;
+}
+
+.JTag_Slider>.slider {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  align-items: center;
+}
+
+.JTag_Slider>.slider>input {
+  height: 100%;
+  width: 60px;
+  background-color: rgba(0, 0, 0, 0);
+  border: 2px solid var(--border-input);
+  color: var(--accent);
+  border-radius: 5px;
+}
+
+.JTag_Slider>.slider>.track {
+  position: relative;
+  min-width: 100px;
+  flex: 1;
+  height: 20px;
+}
+
+.JTag_Slider>.slider>.track>.stick {
+  position: absolute;
+  top: 50%;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background-color: var(--accent);
+  transform: translate(0, -50%);
+}
+
+.JTag_Slider>.slider>.track>.presentation {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: var(--accent);
+  transform: translate(-50%, -50%);
+}
+
+.JTag_Input {
+  width: 100%;
+  height: 100%;
+}
+
+.JTag_Input>.input {
+  box-shadow: 0px 0px 0px;
+  width: 100%;
+  height: 100%;
+  border: 0px;
+  background-color: rgba(0, 0, 0, 0);
+  color: var(--text-primary);
+}
+
+.JTag_Input>.input:hover {
+  background-color: var(--overlay-black-1);
+}
+
+.JTag_Input>.input:not([readonly]):focus {
+  background-color: var(--overlay-black-1);
+}
+
+.JTag_Select {
+  width: 100%;
+  height: 100%;
+  background-color: var(--overlay-2);
+  border-radius: 5px;
+  padding: 5px;
+  color: var(--text-primary);
+}
+
+.JTag_Select>.input {
+  display: none;
+}
+
+.JTag_Select>.valueView {
+  background-color: rgba(0, 0, 0, 0);
+  border: 0;
+}
+
+.JTag_Select-options {
+  color: var(--text-primary);
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  top: 0;
+  left: 0;
+  background-color: var(--bg-panel);
+  border-radius: 5px;
+  border: 1px solid var(--border-default);
+  padding: 5px;
+  gap: 5px;
+  z-index: 9999;
+}
+
+.JTag_Select-options>*:hover {
+  background-color: var(--bg-overlay-hover);
+}
+
+.JTag_Ruler {
+  position: sticky;
+  top: 0;
+  height: 20px;
+  min-height: 20px;
+  background-color: var(--bg-recessed);
+  border-bottom: 1px solid var(--border-subtle);
+  z-index: 2;
+}
+
+.JTag_Ruler>.tick {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding-left: 3px;
+  color: var(--text-muted);
+  font-size: 75%;
+  font-weight: 50;
+  border-left: 1px solid var(--overlay-3);
+  white-space: nowrap;
+}

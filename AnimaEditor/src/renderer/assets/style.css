@@ -1,0 +1,288 @@
+:root {
+  /* ============================================
+   * 背景色 (暗い順)
+   * 前回のスタイルシートと共通の変数名。両ファイルを
+   * 併用する場合は :root の重複定義があっても後勝ちで
+   * 同じ値になるため問題ありません。
+   * ============================================ */
+  --bg-app: rgb(17, 17, 17);
+  --bg-recessed: rgb(24, 24, 24);
+  /* UIの帯(chrome)系の暗い背景: scrollbar, Ruler, Timeline header (元24/30を統合) */
+  --bg-recessed-2: rgb(28, 28, 28);
+  /* コンテンツ領域系の背景: List, trackLabels (元28/32を統合) */
+  --bg-panel: rgb(52, 52, 52);
+  --bg-overlay-hover: rgb(85, 85, 85);
+  --bg-black: rgb(0, 0, 0);
+  --bg-canvas: rgb(209, 209, 209);
+  --bg-group: rgb(35, 35, 35);
+  /* [新規] group-containerの背景 */
+
+  /* ============================================
+   * テキスト / アイコン色 (明るい順)
+   * ============================================ */
+  --text-bright: rgb(230, 230, 230);
+  --text-primary: rgb(217, 217, 217);
+  --text-secondary: rgb(204, 204, 204);
+  --text-tertiary: rgb(181, 180, 180);
+  --text-muted: rgb(148, 148, 148);
+  --text-disabled: rgb(120, 120, 120);
+
+  /* ============================================
+   * ボーダー
+   * ============================================ */
+  --border-default: rgb(93, 93, 93);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-hairline: rgba(255, 255, 255, 0.04);
+  /* [新規] trackLabel/timelineTrackの極細区切り線 */
+  --border-input: rgba(255, 255, 255, 0.205);
+  --border-muted: rgb(65, 65, 65);
+  /* [新規] group-containerの枠線 */
+  --border-hover: rgb(109, 109, 109);
+  /* [新規] group-containerホバー時の枠線 */
+
+  /* ============================================
+   * オーバーレイ(半透明白) アルファ段階順
+   * ============================================ */
+  --overlay-0: rgba(255, 255, 255, 0.02);
+  /* [新規] timelineTrackの奇数行、極めて薄い縞 */
+  --overlay-1: rgba(255, 255, 255, 0.06);
+  /* 行ホバー(元0.05/0.06を統合) */
+  --overlay-2: rgba(255, 255, 255, 0.101);
+  /* 選択状態の背景(元0.1/0.101を統合) */
+  --overlay-3: rgba(255, 255, 255, 0.15);
+  /* スクロールバーつまみ、ruler目盛の区切り線 */
+  --overlay-4: rgba(255, 255, 255, 0.165);
+  --overlay-5: rgba(255, 255, 255, 0.25);
+  --overlay-6: rgba(255, 255, 255, 0.2);
+  /* [新規] rangeSelectionの枠線 */
+  --overlay-black-1: rgba(0, 0, 0, 0.249);
+
+  /* ============================================
+   * アクセント
+   * ============================================ */
+  --accent: azure;
+  --accent-active: rgb(0, 110, 206);
+  /* [新規] .active(選択項目の強調、不透明な濃い青) */
+  --accent-selection: rgba(90, 160, 255, 0.25);
+
+  /* ============================================
+   * タイムライン固有色
+   * ============================================ */
+  --color-keyframe-selected: rgb(255, 170, 60);
+  /* [新規] 選択中キーフレーム(オレンジ) */
+  --color-keyframe-selected-glow: rgba(255, 170, 60, 0.35);
+  /* [新規] 選択中キーフレームの外側グロー */
+  --color-keyframe-breakdown: rgb(140, 200, 255);
+  /* [新規] breakdownキーフレーム(水色) */
+  --color-playhead: rgb(255, 80, 80);
+  /* [新規] プレイヘッド(赤) */
+}
+
+body {
+  overflow: hidden;
+}
+
+.active {
+  background-color: var(--accent-active) !important;
+}
+
+.group-container {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-group);
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+  border: 1px var(--border-muted) solid;
+}
+
+.group-container:hover {
+  border: 1px var(--border-hover) solid;
+}
+
+.group-container>.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 10px;
+  gap: 10px;
+  background-color: var(--bg-recessed);
+  height: 30px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.group-container>.main {
+  overflow: hidden auto;
+  flex: 1;
+}
+
+.timeline {}
+
+.timeline>.header {}
+
+.timeline>.header>.controls {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.timeline>.header>.frameDisplay {
+  color: var(--text-tertiary);
+  font-size: 90%;
+  font-weight: 50;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline-body {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+/* 左側: トラックラベル列 */
+
+.timeline-body-trackLabels {
+  display: flex;
+  flex-direction: column;
+  overflow: scroll;
+  border-right: 1px solid var(--border-subtle);
+  background-color: var(--bg-recessed-2);
+  margin-top: 21px;
+}
+
+.timeline-body-trackLabels-trackLabel {
+  height: 24px;
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-tertiary);
+  font-size: 90%;
+  font-weight: 50;
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+.timeline-body-trackLabels-trackLabel:hover {
+  background-color: var(--overlay-1);
+}
+
+.timeline-body-trackLabels-trackLabel.selected {
+  background-color: var(--overlay-2);
+  color: var(--text-secondary);
+}
+
+/* 右側: ルーラー + トラック + プレイヘッドを内包するスクロール領域 */
+
+.timeline-body-ruler {
+  position: sticky;
+  top: 0;
+  height: 20px;
+  min-height: 20px;
+  background-color: var(--bg-recessed);
+  border-bottom: 1px solid var(--border-subtle);
+  z-index: 2;
+}
+
+.timeline-body-ruler-tick {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding-left: 3px;
+  color: var(--text-muted);
+  font-size: 75%;
+  font-weight: 50;
+  border-left: 1px solid var(--overlay-3);
+  white-space: nowrap;
+}
+
+.timeline-body-tracks {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.timelineTrack {
+  position: relative;
+  height: 24px;
+  min-height: 24px;
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+.timelineTrack:nth-child(odd) {
+  background-color: var(--overlay-0);
+}
+
+.timelineTrack:hover {
+  background-color: var(--overlay-1);
+}
+
+/* キーフレーム(ひし形) */
+
+.timelineTrack>.keyframe {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  background-color: var(--accent);
+  transform: translate(-50%, -50%) rotate(45deg);
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.timelineTrack>.keyframe:hover {
+  filter: brightness(1.2);
+}
+
+.timelineTrack>.keyframe.selected {
+  background-color: var(--color-keyframe-selected);
+  box-shadow: 0 0 0 2px var(--color-keyframe-selected-glow);
+}
+
+.timelineTrack>.keyframe.breakdown {
+  background-color: var(--color-keyframe-breakdown);
+}
+
+/* プレイヘッド: ルーラーとトラック全体を縦断する */
+
+.timeline-body-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: var(--color-playhead);
+  z-index: 3;
+  pointer-events: none;
+}
+
+.timeline-body-playhead-handle {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 12px;
+  height: 14px;
+  background-color: var(--color-playhead);
+  transform: translate(-50%, 0);
+  clip-path: polygon(0 0, 100% 0, 100% 60%, 50% 100%, 0 60%);
+  pointer-events: auto;
+  cursor: ew-resize;
+}
+
+/* 選択範囲のハイライト(ドラッグ選択やループ範囲指定用) */
+
+.timeline>.body>.scrollArea>.rangeSelection {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background-color: var(--overlay-1);
+  border-left: 1px solid var(--overlay-6);
+  border-right: 1px solid var(--overlay-6);
+  pointer-events: none;
+  z-index: 1;
+}
