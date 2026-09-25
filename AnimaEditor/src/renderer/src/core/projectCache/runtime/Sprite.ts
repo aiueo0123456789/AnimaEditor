@@ -2,7 +2,8 @@
 import { ID } from "../../../editor/Editor";
 import { Vec2, Vec2Math, Vec3, Vec3Math } from "../../../util/vecMath";
 import { Model_Sprite } from "../../project/model/Sprite";
-import { ReferenceResolver, Runtime } from "../Runtime";
+import { System_Runtime_ReferencesResolver } from "../../system/runtime/Runtime";
+import { Runtime } from "../Runtime";
 import { Runtime_Bone } from "./Armature";
 import { Runtime_Texture } from "./Texture";
 
@@ -40,15 +41,6 @@ export class Runtime_Sprite extends Runtime<Model_Sprite>  {
     return [0, 0];
   }
 
-  static referenceResolver = {
-    texture: new ReferenceResolver("textureID"),
-    boneWeights: {
-      [ReferenceResolver.PATH.ARRAY]: {
-        bone: new ReferenceResolver("boneID"),
-      },
-    },
-  };
-
   public vertices: Vec2[] = [];
   public indices: Vec3[] = [];
   public silhouetteEdges: Runtime_Edge[] = [];
@@ -84,5 +76,16 @@ export class Runtime_Sprite extends Runtime<Model_Sprite>  {
 
   get edgesNum() {
     return this.edges.length;
+  }
+
+  resolveReferences(referencesResolver: System_Runtime_ReferencesResolver): void {
+    Object.entries(this.model.boneWeights).forEach(([boneWeightID, modelBoneWeight]) => {
+      const runtimeBoneWeightIndex = this.boneWeightIDMap.get(boneWeightID);
+      if (typeof runtimeBoneWeightIndex !== "number") return ;
+      const runtimeBoneWeight = this.boneWeights[runtimeBoneWeightIndex];
+      runtimeBoneWeight.bone = referencesResolver.bone(modelBoneWeight.boneID);
+    })
+    const newTexture = referencesResolver.model(this.model.textureID);
+    if (newTexture instanceof Runtime_Texture) this.texture = newTexture;
   }
 }

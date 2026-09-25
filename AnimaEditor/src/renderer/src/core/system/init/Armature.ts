@@ -66,7 +66,7 @@ export function getTransformByMatrix(matrix: Mat3): { position: Vec2; rotation: 
 /**
  * ランタイムボーンの初期化
  */
-export class System_Armature extends System {
+export class System_Init_Armature extends System {
   constructor(editor: AnimaEditor) {
     super(editor);
   }

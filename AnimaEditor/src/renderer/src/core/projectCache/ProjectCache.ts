@@ -1,10 +1,10 @@
 import { Model_Animation } from "../project/model/Animation";
-import { Model_Armature } from "../project/model/Armature";
+import { BoneReference, Model_Armature } from "../project/model/Armature";
 import { Model_Sprite } from "../project/model/Sprite";
 import { Runtime_Texture } from "./runtime/Texture";
 import { Runtime } from "./Runtime";
 import { Runtime_Animation } from "./runtime/Animation";
-import { Runtime_Armature } from "./runtime/Armature";
+import { Runtime_Armature, Runtime_Bone } from "./runtime/Armature";
 import { Runtime_Sprite } from "./runtime/Sprite";
 import { Model_Texture } from "../project/model/Texture";
 import { ID } from "../../editor/Editor";

@@ -1,8 +1,9 @@
 
 import { ID } from "../../../editor/Editor";
 import { Mat3, Mat3Math, Vec2, Vec2Math } from "../../../util/vecMath";
-import { Model_Armature, Model_Bone } from "../../project/model/Armature";
-import { ReferenceResolver, Runtime } from "../Runtime";
+import { BoneReference, Model_Armature, Model_Bone } from "../../project/model/Armature";
+import { System_Runtime_ReferencesResolver } from "../../system/runtime/Runtime";
+import { Runtime } from "../Runtime";
 
 
 class Base {
@@ -88,15 +89,6 @@ export class Runtime_Armature extends Runtime<Model_Armature> {
     return new Runtime_Bone(boneID, bone);
   }
 
-  static override referenceResolver = {
-    bones: {
-      [ReferenceResolver.PATH.ARRAY]: {
-        parent: new ReferenceResolver("parentID"),
-      },
-    },
-  };
-
-
   public bones: Runtime_Bone[] = [];
   public boneIDMap: Map<ID, number> = new Map();
   public override model: Model_Armature;
@@ -106,9 +98,17 @@ export class Runtime_Armature extends Runtime<Model_Armature> {
   }
 
   getBoneByID(id: ID): Runtime_Bone | null {
-    for (const bone of this.bones) {
-      if (bone.id === id) return bone;
-    }
-    return null;
+    const index = this.boneIDMap.get(id);
+    if (typeof index !== "number") return null;
+    return this.bones[index];
+  }
+
+  resolveReferences(referencesResolver: System_Runtime_ReferencesResolver): void {
+    Object.entries(this.model.bones).forEach(([boneID, modelBone]) => {
+      const runtimeBoneIndex = this.boneIDMap.get(boneID);
+      if (typeof runtimeBoneIndex !== "number") return ;
+      const runtimeBone = this.bones[runtimeBoneIndex];
+      runtimeBone.parent = referencesResolver.bone(modelBone.parentID);
+    })
   }
 }

@@ -6,7 +6,7 @@ import { System } from "../System";
 /**
  * ランタイムテクスチャの初期化
  */
-export class System_Texture extends System {
+export class System_Init_Texture extends System {
   constructor(editor: AnimaEditor) {
     super(editor);
   }

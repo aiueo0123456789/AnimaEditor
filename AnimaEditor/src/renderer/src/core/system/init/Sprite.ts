@@ -8,7 +8,7 @@ import { System } from "../System";
 /**
  * ランタイムメッシュの初期化
  */
-export class System_Sprite extends System {
+export class System_Init_Sprite extends System {
   constructor(editor: AnimaEditor) {
     super(editor);
   }
@@ -30,7 +30,7 @@ export class System_Sprite extends System {
 
       const modelBoneWeights = Object.entries(model.boneWeights);
       if (runtime.boneWeights.length !== modelBoneWeights.length ||
-          modelBoneWeights.some(([boneWeightID], index) => runtime.boneWeightIDMap.get(boneWeightID) !== index)) {
+          modelBoneWeights.some(([boneWeightID, boneWeight]) => !runtime.boneWeightIDMap.has(boneWeightID))) {
         runtime.boneWeights.length = 0;
         runtime.boneWeightIDMap.clear();
         for (const [boneWeightID] of modelBoneWeights) {
@@ -43,7 +43,7 @@ export class System_Sprite extends System {
       let isChangedVertex = false;
       const modelVertices = Object.entries(model.vertices);
       if (runtime.vertices.length !== modelVertices.length ||
-          modelVertices.some(([vertexID], index) => runtime.vertexIDMap.get(vertexID) !== index)) {
+          modelVertices.some(([vertexID, vertex]) => !runtime.vertexIDMap.has(vertexID))) {
         isChangedVertex = true;
         runtime.vertices.length = 0;
         runtime.texcoords.length = 0;

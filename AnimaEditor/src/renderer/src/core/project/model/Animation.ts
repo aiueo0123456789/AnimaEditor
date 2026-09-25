@@ -13,10 +13,14 @@ interface KeyframeInput {
   interpolation?: KeyframeInterpolation
 };
 
+interface Model_AnimationTrackInput {
+  keyframes?: KeyframeInput[],
+  path?: string,
+}
+
 export interface Model_AnimationInput extends ModelInput {
   targetID: ModelReferenceInput | BoneReferenceInput,
-  path?: string,
-  keyframes?: KeyframeInput[],
+  tracks: Record<ID, Model_AnimationTrackInput>,
 };
 
 class Keyframe {
@@ -32,19 +36,32 @@ class Keyframe {
   }
 }
 
+export class Model_AnimationTrack {
+  public path: string;
+  public keyframes: Keyframe[];
+  constructor(data: Model_AnimationTrackInput) {
+    this.keyframes = data.keyframes ? data.keyframes.map((keyframe) => new Keyframe(keyframe)) : [];
+    this.path = data.path ?? "";
+  }
+}
+
 export class Model_Animation extends Model {
   static createKeyframe(data: KeyframeInput): Keyframe {
     return new Keyframe(data);
   }
 
   public targetID: ModelReference | BoneReference;
-  public path: string;
-  public keyframes: Keyframe[];
+  public tracks: Record<ID, Model_AnimationTrack>;
   constructor(data: Model_AnimationInput) {
     super(data);
 
-    this.targetID = data.targetID.modelID ? new ModelReference(data.targetID) : new BoneReference(data.targetID);
-    this.path = data.path ?? "";
-    this.keyframes = data.keyframes ? data.keyframes.map((keyframe) => new Keyframe(keyframe)) : [];
+    this.targetID = "modelID" in data.targetID ? new ModelReference(data.targetID) : new BoneReference(data.targetID);
+    this.tracks = Object.fromEntries(
+      Object.entries(data.tracks ?? {}).map(([id, track]) => [id, new Model_AnimationTrack(track)]),
+    );
+  }
+
+  get tracksNum() {
+    return Object.keys(this.tracks).length;
   }
 }

@@ -34,7 +34,7 @@ export class Model_Bone {
   public name: string;
   public head: Vec2;
   public tail: Vec2;
-  public parentID: BoneReference | null;
+  public parentID: BoneReference;
   constructor(data: Model_BoneInput) {
     this.name = data.name ?? "名称未設定ボーン";
     this.head = data.head ?? Vec2Math.create();

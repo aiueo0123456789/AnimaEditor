@@ -5,8 +5,9 @@ import { EditorState, States } from "./editorState/EditorState";
 import { Model_Animation, Model_AnimationInput } from "../core/project/model/Animation";
 import { Model_Sprite, Model_SpriteInput } from "../core/project/model/Sprite";
 import { Model_Armature, Model_ArmatureInput } from "../core/project/model/Armature";
-import { System_Sprite } from "../core/system/init/Sprite";
-import { System_Armature } from "../core/system/init/Armature";
+import { System_Init_Sprite } from "../core/system/init/Sprite";
+import { System_Init_Armature } from "../core/system/init/Armature";
+import { System_Init_Animation } from "../core/system/init/Animation";
 import { System_Runtime } from "../core/system/runtime/Runtime";
 import { System_Animation } from "../core/system/animation/Animation";
 import { Manager } from "../manager/Manager";
@@ -17,7 +18,7 @@ import { ProjectCache, Runtimes } from "../core/projectCache/ProjectCache";
 import { JTag } from "../library/JTag/JTag";
 import { simpleWebGPU } from "../util/simpleWebGPU";
 import { wgslShaderCodes } from "./wgslShaderCodes";
-import { System_Texture } from "../core/system/init/Texture";
+import { System_Init_Texture } from "../core/system/init/Texture";
 import { Model_Texture, Model_TextureInput } from "../core/project/model/Texture";
 import { Observer } from "./Observer";
 import { projectSave } from "./serialization/Save";
@@ -71,9 +72,10 @@ export class AnimaEditor {
     this.project = new Project({ sceneConfig: {projectName: "初期プロジェクト"}, animationConfig: {frameStart: 0, frameEnd: 20, frameSpeed: 0.1}, models: [] });
     this.projectCache = new ProjectCache(this.project);
     this.systems = [
-      new System_Texture(this),
-      new System_Sprite(this),
-      new System_Armature(this),
+      new System_Init_Texture(this),
+      new System_Init_Sprite(this),
+      new System_Init_Armature(this),
+      new System_Init_Animation(this),
       new System_Runtime(this),
       new System_Animation(this),
       new System_Bone(this),

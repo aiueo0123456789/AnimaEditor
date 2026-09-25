@@ -29,18 +29,18 @@ export class UIComponent_Timeline extends UIComponent {
     return {
       frameStart: config.frameStart, frameEnd: config.frameEnd,
       currentFrame: runtime.currentFrame, playing: runtime.isPlay,
-      tracks: editor.project.getModelsByType(Model_Animation).map(animation => {
+      tracks: editor.project.getModelsByType(Model_Animation).flatMap(animation => {
         const reference = animation.targetID;
         const target = editor.project.getModelByID("modelID" in reference ? reference.modelID : reference.aramatureID);
         const kind: TimelineKind = target instanceof Model_Armature ? "armature" : target instanceof Model_Sprite ? "sprite" : "other";
         const state = editor.editorState.getModelStateByID(animation.id);
-        return {
-          id: animation.id, label: animation.name, kind,
-          keyframes: animation.keyframes.map(key => ({
+        return Object.entries(animation.tracks).map(([trackID, track]) => ({
+          id: JSON.stringify([animation.id, trackID]), label: `${animation.name} / ${track.path || trackID}`, kind,
+          keyframes: track.keyframes.map(key => ({
             id: key.id, frame: key.frame,
             selected: state instanceof AnimationState && state.selectKeyframeIDs.includes(key.id),
           })),
-        };
+        }));
       }),
     };
   }
@@ -59,17 +59,20 @@ export class UIComponent_Timeline extends UIComponent {
           editor.api.setProperty(editor.projectCache, "sceneConfig.currentFrame", frame);
         },
         onSelectKeyframe: (trackID, keyframeID, additive) => {
-          const target = editor.project.getModelByID(trackID);
-          if (!(target instanceof Model_Animation) || !target.keyframes.some(key => key.id === keyframeID)) return;
-          for (const animation of editor.project.getModelsByType(Model_Animation)) {
+          const animations = editor.project.getModelsByType(Model_Animation);
+          const target = animations.find(animation => Object.entries(animation.tracks).some(([id, track]) =>
+            JSON.stringify([animation.id, id]) === trackID && track.keyframes.some(key => key.id === keyframeID)));
+          if (!target) return;
+          for (const animation of animations) {
             const state = editor.editorState.getModelStateByID(animation.id);
             if (!(state instanceof AnimationState)) continue;
-            let ids = additive ? [...new Set(state.selectKeyframeIDs)].filter(id => animation.keyframes.some(key => key.id === id)) : [];
-            if (animation.id === trackID) {
+            const validKeys = new Set(Object.values(animation.tracks).flatMap(track => track.keyframes.map(key => key.id)));
+            let ids = additive ? [...new Set(state.selectKeyframeIDs)].filter(id => validKeys.has(id)) : [];
+            if (animation === target) {
               ids = additive && ids.includes(keyframeID) ? ids.filter(id => id !== keyframeID) : [...ids, keyframeID];
             }
             editor.api.setProperty(state, "selectKeyframeIDs", ids);
-            const activeID = animation.id === trackID && ids.includes(keyframeID) ? keyframeID
+            const activeID = animation === target && ids.includes(keyframeID) ? keyframeID
               : ids.includes(state.activeKeyframeID) ? state.activeKeyframeID : ids.at(-1) ?? "";
             editor.api.setProperty(state, "activeKeyframeID", activeID);
           }
