@@ -28,83 +28,109 @@ export class System_Sprite extends System {
         runtime.zIndex = model.zIndex;
       }
 
-      if (runtime.boneWeights.length !== model.boneWeights.length) {
+      const modelBoneWeights = Object.entries(model.boneWeights);
+      if (runtime.boneWeights.length !== modelBoneWeights.length ||
+          modelBoneWeights.some(([boneWeightID], index) => runtime.boneWeightIDMap.get(boneWeightID) !== index)) {
         runtime.boneWeights.length = 0;
-        for (let i = 0; i < model.boneWeights.length; i++) {
-          const boneWeight = Runtime_Sprite.createBoneWeight();
+        runtime.boneWeightIDMap.clear();
+        for (const [boneWeightID] of modelBoneWeights) {
+          const boneWeight = Runtime_Sprite.createBoneWeight(boneWeightID);
+          runtime.boneWeightIDMap.set(boneWeightID, runtime.boneWeights.length);
           runtime.boneWeights.push(boneWeight);
         }
       }
 
       let isChangedVertex = false;
-      if (runtime.vertices.length !== model.vertices.length) {
+      const modelVertices = Object.entries(model.vertices);
+      if (runtime.vertices.length !== modelVertices.length ||
+          modelVertices.some(([vertexID], index) => runtime.vertexIDMap.get(vertexID) !== index)) {
         isChangedVertex = true;
         runtime.vertices.length = 0;
         runtime.texcoords.length = 0;
         runtime.vertexIDMap.clear();
-        for (let vi = 0; vi < model.vertices.length; vi++) {
+        for (let vi = 0; vi < modelVertices.length; vi++) {
           runtime.vertices.push(Runtime_Sprite.createVertex());
           runtime.texcoords.push(Runtime_Sprite.createTexcoord());
-          runtime.vertexIDMap.set(model.vertices[vi].id, vi);
-        }
+          runtime.vertexIDMap.set(modelVertices[vi][0], vi);
 
-        for (let i = 0; i < model.boneWeights.length; i++) {
-          const boneWeight = runtime.boneWeights[i];
-          boneWeight.weights.length = 0;
-          for (const weight of model.boneWeights[i].weights) {
-            boneWeight.weights.push(weight);
+          for (const boneWeight of runtime.boneWeights) { // ウェイトの数を頂点数に揃える
+            boneWeight.weights.push(0);
           }
         }
       }
 
+      for (const [boneWeightID, modelBoneWeight] of modelBoneWeights) {
+        const source = modelBoneWeight.weights;
+        const runtimeBoneWeightIndex = runtime.boneWeightIDMap.get(boneWeightID);
+
+        if (typeof runtimeBoneWeightIndex !== "number") {
+          console.error("存在しないボーンウェイトです");
+          return ;
+        }
+
+        const weights = runtime.boneWeights[runtimeBoneWeightIndex].weights;
+        weights.length = modelVertices.length;
+        for (let vi = 0; vi < modelVertices.length; vi++) {
+          weights[vi] = source[modelVertices[vi][0]] ?? 0;
+        }
+      }
+
       let isChangedEdge = false;
-      if (runtime.edges.length !== model.edges.length) {
+      const modelEdges = Object.entries(model.edges).filter(([, edge]) => edge.vertices.every(id => runtime.vertexIDMap.has(id)));
+      if (runtime.edges.length !== modelEdges.length || modelEdges.some(([edgeID], index) => runtime.edgeIDMap.get(edgeID) !== index)) {
         isChangedEdge = true;
         runtime.edges.length = 0;
         runtime.edgeIDMap.clear();
-        for (let ei = 0; ei < model.edges.length; ei++) {
+        for (let ei = 0; ei < modelEdges.length; ei++) {
           const edge = Runtime_Sprite.createEdge();
           runtime.edges.push(edge);
-          runtime.edgeIDMap.set(model.edges[ei].id, ei);
+          runtime.edgeIDMap.set(modelEdges[ei][0], ei);
         }
       }
 
-      if (runtime.silhouetteEdges.length !== model.silhouetteEdges.length) {
+      const modelSilhouetteEdges = Object.entries(model.silhouetteEdges).filter(([, edge]) => edge.vertices.every(id => runtime.vertexIDMap.has(id)));
+      if (runtime.silhouetteEdges.length !== modelSilhouetteEdges.length || modelSilhouetteEdges.some(([edgeID], index) => runtime.silhouetteEdgeIDMap.get(edgeID) !== index)) {
         isChangedEdge = true;
         runtime.silhouetteEdges.length = 0;
         runtime.silhouetteEdgeIDMap.clear();
-        for (let ei = 0; ei < model.silhouetteEdges.length; ei++) {
+        for (let ei = 0; ei < modelSilhouetteEdges.length; ei++) {
           const edge = Runtime_Sprite.createEdge();
           runtime.silhouetteEdges.push(edge);
-          runtime.silhouetteEdgeIDMap.set(model.silhouetteEdges[ei].id, ei);
+          runtime.silhouetteEdgeIDMap.set(modelSilhouetteEdges[ei][0], ei);
         }
+      }
+
+      for (const [edgeID, me] of modelEdges) {
+          const rei = runtime.edgeIDMap.get(edgeID) ?? 0;
+          const re = runtime.edges[rei];
+          const a = runtime.vertexIDMap.get(me.vertices[0])!;
+          const b = runtime.vertexIDMap.get(me.vertices[1])!;
+          if (re[0] !== a || re[1] !== b) isChangedEdge = true;
+          re[0] = a;
+          re[1] = b;
+      }
+      for (const [edgeID, me] of modelSilhouetteEdges) {
+          const rei = runtime.silhouetteEdgeIDMap.get(edgeID) ?? 0;
+          const re = runtime.silhouetteEdges[rei];
+          const a = runtime.vertexIDMap.get(me.vertices[0])!;
+          const b = runtime.vertexIDMap.get(me.vertices[1])!;
+          if (re[0] !== a || re[1] !== b) isChangedEdge = true;
+          re[0] = a;
+          re[1] = b;
       }
 
       let hasChanged = isChangedVertex || isChangedEdge;
-      if (isChangedVertex || isChangedEdge) {
-        for (const me of model.edges) {
-          const rei = runtime.edgeIDMap.get(me.id) ?? 0;
-          const re = runtime.edges[rei];
-          re[0] = runtime.vertexIDMap.get(me.vertices[0]) ?? 0;
-          re[1] = runtime.vertexIDMap.get(me.vertices[1]) ?? 0;
-        }
-        for (const me of model.silhouetteEdges) {
-          const rei = runtime.silhouetteEdgeIDMap.get(me.id) ?? 0;
-          const re = runtime.silhouetteEdges[rei];
-          re[0] = runtime.vertexIDMap.get(me.vertices[0]) ?? 0;
-          re[1] = runtime.vertexIDMap.get(me.vertices[1]) ?? 0;
-        }
-      }
 
-      for (let i = 0; i < model.verticesNum; i++) {
-        if (!Vec2Math.equal(model.vertices[i].co, runtime.vertices[i], 0.001)) {
+      for (let i = 0; i < modelVertices.length; i++) {
+        const vertex = modelVertices[i][1];
+        if (!Vec2Math.equal(vertex.co, runtime.vertices[i], 0.001)) {
           hasChanged = true;
         }
-        Vec2Math.copy(model.vertices[i].co, runtime.vertices[i]);
+        Vec2Math.copy(vertex.co, runtime.vertices[i]);
         Vec2Math.copy(
           Vec2Math.flipY(
             Vec2Math.div(
-              Vec2Math.sub(model.vertices[i].co, model.textureRect.min),
+              Vec2Math.sub(vertex.co, model.textureRect.min),
               Vec2Math.sub(model.textureRect.max, model.textureRect.min),
             ),
             1,
@@ -114,7 +140,7 @@ export class System_Sprite extends System {
       }
 
       if (hasChanged) {
-        const indices = cutSilhouetteOutTriangle(runtime.vertices, cdt(runtime.vertices, runtime.edges), runtime.silhouetteEdges);
+        const indices = runtime.vertices.length < 3 ? [] : cutSilhouetteOutTriangle(runtime.vertices, cdt(runtime.vertices, runtime.edges), runtime.silhouetteEdges);
         // const indices = cdt(runtime.vertices, runtime.edges);
         runtime.indices.length = 0;
         for (let i = 0; i < indices.length; i++) {

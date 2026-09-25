@@ -1,489 +1,135 @@
 import { Model_Sprite } from "../../../core/project/model/Sprite";
-import { AnimaEditor } from "../../../editor/Editor";
-import { JTag } from "../../../library/JTag/JTag";
-import { JTag_CustomTag } from "../../../library/JTag/tag/CustomTag";
-import { JTag_DBInput } from "../../../library/JTag/tag/DBInput";
-import { JTag_Label } from "../../../library/JTag/tag/Label";
-import { JTag_Section } from "../../../library/JTag/tag/Section";
-import { JTag_Select } from "../../../library/JTag/tag/Select";
-import { setPropertyOnInput, UIComponent } from "../UI";
-import { JTag_Base } from "../../../library/JTag/tag/Base";
+import { BoneReference, Model_Armature } from "../../../core/project/model/Armature";
 import { Model_Texture } from "../../../core/project/model/Texture";
-import { Model_Armature, Model_Bone } from "../../../core/project/model/Armature";
+import type { AnimaEditor } from "../../../editor/Editor";
 import { CommandManager } from "../../../manager/CommandManager";
-import { JTag_List } from "../../../library/JTag/tag/List";
-import { JTag_Container } from "../../../library/JTag/tag/Container";
-import { JTag_Slider } from "../../../library/JTag/tag/Slider";
-import { JTag_Button } from "../../../library/JTag/tag/Button";
-import { UIManager } from "../../../manager/UIManager";
 import { EditorEvent, EditorEventType } from "../../../manager/EventManager";
-import { ContextManager } from "../../../manager/ContextManager";
-import { SetPropertyCommand, SetPropertyCommandInput } from "../../../editor/command/SetProperty";
+import { UIManager } from "../../../manager/ui/UIManager";
+import type { WidgetHandle } from "../../../manager/ui/WidgetTree";
+import { bind, Button, RenameButton, List, Column, Header, Main, Row, Section, Select, Slider, Text, TextField } from "../../../manager/ui/components";
+import type { Widget } from "../../../manager/ui/components";
+import { commitUIAddValue, commitUIProperty } from "../../../manager/ui/commands";
+import { UIComponent } from "../UI";
+import { UIComponent_Inspector_SpaceData } from "./SpaceData";
 
-function armAndBoneToString(arm: Model_Armature | null, bone: Model_Bone | null) {
-  if (arm && bone) return `${arm.id}&${bone.id}`;
-  else return "";
-}
-
-let counter = 0;
 export class UIComponent_Inspector extends UIComponent {
-  private domMap: {
-    sprite: {
-      section: JTag_Section,
-      name: JTag_DBInput,
-      textureSelect: JTag_Select,
-      boneWeights: JTag_List,
-      boneWeightsActionPlus: JTag_Button,
-      boneWeightsActionMinus: JTag_Button,
-      boneWeightTargetSelect: JTag_Select,
-    },
-    armature: {
-      section: JTag_Section,
-      name: JTag_DBInput,
-    },
-  }
-  constructor() {
-    super({ name: "Inspector", id: counter, icon: "inf" });
-    counter++;
+  private handle: WidgetHandle | null = null;
+  private host: HTMLElement | null = null;
+  private renderedListHeight = 180;
 
-    this.domMap = {
-      sprite: {
-        section: JTag.createTag(JTag_Section),
-        name: JTag.createTag(JTag_DBInput),
-        textureSelect: JTag.createTag(JTag_Select),
-        boneWeights: JTag.createTag(JTag_List),
-        boneWeightsActionPlus: JTag.createTag(JTag_Button),
-        boneWeightsActionMinus: JTag.createTag(JTag_Button),
-        boneWeightTargetSelect: JTag.createTag(JTag_Select),
-      },
-      armature: {
-        section: JTag.createTag(JTag_Section),
-        name: JTag.createTag(JTag_DBInput),
-      },
-    };
+  constructor(public readonly spaceData = new UIComponent_Inspector_SpaceData()) { super({ name: "Inspector", id: 0, icon: "inf" }); }
+  public override input(): void {}
+
+  public override dispose(editor: AnimaEditor): void {
+    if (this.handle) editor.getManager(UIManager)?.disposeWidget(this.handle);
+    this.handle = null;
+    this.host = null;
   }
 
-  public override input(): void {
-  }
-
-  public override update(editor: AnimaEditor, parent: JTag_CustomTag): void {
-    const uiManager = editor.getManager(UIManager);
-    if (!uiManager) return ;
-    const contextManager = editor.getManager(ContextManager);
-    if (!contextManager) return ;
-    const activeObjectSourceContext = contextManager.activeObjectSourceContext;
-    const projectSourceContext = contextManager.projectSourceContext;
-
-    const libraryJTag = editor.library.JTag;
-    if (!parent.getElementByID("Inspector")) {
-      libraryJTag.clear(parent);
-      const container = JTag.createTag(JTag_Container);
-      container.body.classList.add("group-container");
-      container.id = `Inspector`;
-      libraryJTag.append(parent, container);
-
-      const header = JTag.createTag(JTag_Base);
-      header.body.classList.add("header");
-
-      const iconTag = JTag.createTag(JTag_Button);
-      iconTag.setIcon(JTag.getSvg(this.icon));
-      iconTag.setText(this.name);
-      libraryJTag.append(header, iconTag);
-
-      const body = JTag.createTag(JTag_Base);
-      body.body.classList.add("main");
-
-      libraryJTag.append(container, header);
-      libraryJTag.append(container, body);
-
-      { // スプライト
-        const section = JTag.createTag(JTag_Section);
-        section.id = "Inspector-Sprite";
-        section.setTitle("Sprite");
-
-        uiManager.addTagUpdater(
-          UIManager.createTagUpdater({
-            targetEvents: [
-              new EditorEvent(EditorEventType.change, editor.editorState, "activeObject"),
-            ],
-            tagMap: {section: section},
-            inputMap: {activeObject: activeObjectSourceContext},
-            update: (input) => {
-              const activeObject = input.inputMap.activeObject;
-              if (activeObject instanceof Model_Sprite) input.tagMap.section.body.classList.remove("hidden");
-              else input.tagMap.section.body.classList.add("hidden");
-            },
-          })
-        );
-
-        libraryJTag.append(body, section);
-
-        const label = JTag.createTag(JTag_Label);
-        label.setLabel("名前");
-        const name = JTag.createTag(JTag_DBInput);
-        name.setValue("未設定");
-
-        uiManager.addTagUpdater(
-          UIManager.createTagUpdater({
-            targetEvents: [
-              new EditorEvent(EditorEventType.change, editor, "project"),
-              new EditorEvent(EditorEventType.change, editor.editorState, "activeObject"),
-              new EditorEvent(EditorEventType.change, activeObjectSourceContext, "name")
-            ],
-            tagMap: {name: name},
-            inputMap: {activeObject: activeObjectSourceContext},
-            update: (input) => {
-              const activeObject = input.inputMap.activeObject;
-              if (activeObject instanceof Model_Sprite) input.tagMap.name.setValue(activeObject.name);
-            },
-          })
-        );
-
-        uiManager.addInputer(UIManager.createInputer({
-          targetEvents: [
-            new EditorEvent(EditorEventType.change, editor, "project"),
-            new EditorEvent(EditorEventType.change, editor.editorState, "activeObject"),
-          ],
-          tagMap: {name: name},
-          inputMap: {activeObject: activeObjectSourceContext},
-          action: (commandManager, input) => {
-            console.log(commandManager, input)
-            const change = input.tagMap.name.addEventListener("change", () => {
-              commandManager.setCommandRecorder();
-              commandManager.commandRecorder?.setCommand(SetPropertyCommand, {
-                model: input.inputMap.activeObject,
-                path: "name",
-                newValue: input.tagMap.name.value,
-              } as SetPropertyCommandInput);
-              commandManager.commandRecorder?.finishCommand();
-              commandManager.finishCommandRecorder();
-            });
-            return [change];
-          }
+  public override update(editor: AnimaEditor, parent: HTMLElement): void {
+    if (this.host === parent && this.handle && this.renderedListHeight === this.spaceData.boneWeightListHeight) return;
+    this.dispose(editor);
+    const ui = editor.getManager(UIManager);
+    const commands = editor.getManager(CommandManager);
+    if (!ui || !commands) return;
+    const createChangeEvent = (source: unknown, path: string) => new EditorEvent(EditorEventType.change, source, path);
+    const build = (): Widget => {
+      const model = editor.editorState.activeObject;
+      const children: Widget[] = [];
+      if (model instanceof Model_Sprite || model instanceof Model_Armature) {
+        children.push(TextField({
+          label: "名前",
+          observeEvents: [createChangeEvent(model, "name")],
+          value: bind({ read: () => model.name }),
+          onChange: () => {},
+          onCommit: value => { if (model.name !== value) commitUIProperty(commands, model, "name", value); },
         }));
-
-        // setPropertyOnInput(commandManager, name, activeObjectSourceContext, "name");
-
-        libraryJTag.append(section, label);
-        libraryJTag.append(section, name);
-
-        const label_alpha = JTag.createTag(JTag_Label);
-        label_alpha.setLabel("透明度");
-        const slider = JTag.createTag(JTag_Slider);
-        slider.setMin(0);
-        slider.setMax(1);
-        slider.setValue(1);
-        libraryJTag.append(section, label_alpha);
-        libraryJTag.append(section, slider);
-
-        const labelParentSelect = JTag.createTag(JTag_Label);
-        labelParentSelect.setLabel("テクスチャ");
-
-        const textureSelect = JTag.createTag(JTag_Select);
-
-        // models(textureの可能性)が追加されたらSelectを更新する
-        uiManager.addTagUpdater(
-          UIManager.createTagUpdater({
-            targetEvents: [
-              new EditorEvent(EditorEventType.change, editor, "project"),
-              new EditorEvent(EditorEventType.add, projectSourceContext, "models"),
-              new EditorEvent(EditorEventType.delete, projectSourceContext, "models")
-            ],
-            tagMap: {texture: textureSelect},
-            inputMap: {project: projectSourceContext},
-            update: (input) => {
-              if (!input.inputMap.project) return ;
-              input.tagMap.texture.setOptions(input.inputMap.project.getModelsByType(Model_Texture).map(texture => JTag_Select.createOption(texture.id, texture.name)));
-            },
-          })
-        );
-
-        uiManager.addTagUpdater(
-          UIManager.createTagUpdater({
-            targetEvents: [
-              new EditorEvent(EditorEventType.change, editor, "project"),
-              new EditorEvent(EditorEventType.change, editor.editorState, "activeObject"),
-              new EditorEvent(EditorEventType.change, activeObjectSourceContext, "textureID.modelID")
-            ],
-            tagMap: {texture: textureSelect},
-            inputMap: {activeObject: activeObjectSourceContext},
-            update: (input) => {
-              const activeObject = input.inputMap.activeObject;
-              if (activeObject instanceof Model_Sprite) input.tagMap.texture.setValue(activeObject.textureID.modelID);
-            },
-          })
-        );
-        // setPropertyCommandDBInput(commandManager, textureSelect, activeObjectSourceContext, "textureID.modelID");
-
-        libraryJTag.append(section, labelParentSelect);
-        libraryJTag.append(section, textureSelect);
-
-        const boneWeightsLabel = JTag.createTag(JTag_Label);
-        boneWeightsLabel.setLabel("ボーンウェイト");
-
-        const boneWeightsList = JTag.createTag(JTag_List);
-        boneWeightsList.setMinHeight(100);
-        libraryJTag.append(section, boneWeightsLabel);
-        libraryJTag.append(section, boneWeightsList);
-
-        const actionPlusBtn = JTag.createTag(JTag_Button);
-        actionPlusBtn.setIcon(JTag.getSvg("plus"));
-        libraryJTag.append(boneWeightsList, actionPlusBtn, 1);
-
-        const actionMinusBtn = JTag.createTag(JTag_Button);
-        actionMinusBtn.setIcon(JTag.getSvg("minus"));
-        libraryJTag.append(boneWeightsList, actionMinusBtn, 1);
-
-        const activeWeightGroupLabel = JTag.createTag(JTag_Label);
-        activeWeightGroupLabel.setLabel("選択中");
-        libraryJTag.append(section, activeWeightGroupLabel);
-
-        const targetSelect = JTag.createTag(JTag_Select);
-        targetSelect.setOptionGenerator(() => {
-          const options = [JTag_Select.createOption(armAndBoneToString(null, null), "未選択")];
-          for (const arm of editor.project.getModelsByType(Model_Armature)) {
-            for (const bone of arm.bones) {
-              options.push(JTag_Select.createOption(armAndBoneToString(arm, bone), arm.name));
-            }
-          }
-          return options;
+        children.push(Slider({ label: "透明度", value: 1, min: 0, max: 1, disabled: true, onChange: () => {} }));
+      }
+      if (model instanceof Model_Sprite) {
+        const texture = (): Widget => Select({
+          label: "テクスチャ",
+          observeEvents: [
+            new EditorEvent(EditorEventType.add, editor.project, "models"),
+            new EditorEvent(EditorEventType.delete, editor.project, "models"),
+            ...editor.project.getModelsByType(Model_Texture).map(item => {
+              return createChangeEvent(item, "name");
+            }),
+          ],
+          rebuild: texture,
+          options: editor.project.getModelsByType(Model_Texture).map(item => ({ value: item.id, label: item.name })),
+          value: bind({ read: () => model.textureID.modelID, observeEvents: [createChangeEvent(model, "textureID.modelID")] }),
+          onChange: value => { if (value !== null) commitUIProperty(commands, model, "textureID.modelID", value); },
         });
-
-        uiManager.addTagUpdater(
-          UIManager.createTagUpdater({
-            targetEvents: [
-              new EditorEvent(EditorEventType.change, editor, "project"),
-              new EditorEvent(EditorEventType.change, editor.editorState, "activeObject"),
-              new EditorEvent(EditorEventType.add, activeObjectSourceContext, "boneWeights"),
-              new EditorEvent(EditorEventType.delete, activeObjectSourceContext, "boneWeights")
+        const weights = (): Widget => {
+          const state = editor.editorState.getModelStateByID(model.id);
+          return Section({
+            title: "ボーンウェイト", rebuild: weights,
+            observeEvents: [
+              new EditorEvent(EditorEventType.add, model, "boneWeights"),
+              new EditorEvent(EditorEventType.delete, model, "boneWeights"),
             ],
-            tagMap: {texture: textureSelect},
-            inputMap: {activeObject: activeObjectSourceContext},
-            update: (input) => {
-              libraryJTag.clear(boneWeightsList);
-              const activeObject = input.inputMap.activeObject;
-              if (!(activeObject instanceof Model_Sprite)) return ;
-              for (let boneWeightIndex = 0; boneWeightIndex < activeObject.boneWeights.length; boneWeightIndex ++) {
-                const boneWeight = activeObject.boneWeights[boneWeightIndex];
-                const boneWeightName = JTag.createTag(JTag_DBInput);
-                boneWeightName.setValue(boneWeight.name);
-                // setPropertyOnInput(commandManager, boneWeightName, activeObject, `boneWeights.${boneWeightIndex}.name`);
-                libraryJTag.append(boneWeightsList, boneWeightName);
-              }
-            },
-          })
-        );
-        libraryJTag.append(section, targetSelect);
-      }
-
-      // アーマチュア
-      {
-        const section = JTag.createTag(JTag_Section);
-        section.id = "Inspector-Armature";
-        section.setTitle("Armature");
-
-        uiManager.addTagUpdater(
-          UIManager.createTagUpdater({
-            targetEvents: [
-              new EditorEvent(EditorEventType.change, editor.editorState, "activeObject"),
+            children: [
+              List({
+                label: "ボーンウェイト",
+                height: this.spaceData.boneWeightListHeight,
+                onHeightChange: height => { this.spaceData.boneWeightListHeight = height; this.renderedListHeight = height; },
+                children: Object.entries(model.boneWeights).map(([boneWeightID, weight]) => {
+                  return RenameButton({
+                    key: boneWeightID,
+                    label: bind({ read: () => weight.name, observeEvents: [createChangeEvent(model, `boneWeights.${boneWeightID}.name`)] }),
+                    pressed: bind({
+                      observeEvents: [createChangeEvent(state, "activeBoneWeightID")],
+                      read: () => state !== null && "activeBoneWeightID" in state && state.activeBoneWeightID === boneWeightID,
+                    }),
+                    onPress: () => {
+                      if (state && "activeBoneWeightID" in state && state.activeBoneWeightID !== boneWeightID)
+                        commitUIProperty(commands, state, "activeBoneWeightID", boneWeightID);
+                    },
+                    onRename: name => {
+                      if (model.boneWeights[boneWeightID]?.name !== name)
+                        commitUIProperty(commands, model, `boneWeights.${boneWeightID}.name`, name);
+                    },
+                  });
+                })
+              }), Row({ children: [
+                Button({ label: "追加", onPress: () => {
+                  commitUIAddValue(commands, model, "boneWeights", crypto.randomUUID(), Model_Sprite.createBoneWeight({
+                    name: "名称未設定",
+                    weights: {},
+                    boneID: new BoneReference({aramatureID: "", boneID: ""})
+                  }));
+                }}),
+                Button({ label: "削除", disabled: true, onPress: () => {} }),
+              ]})
             ],
-            tagMap: {section: section},
-            inputMap: {activeObject: activeObjectSourceContext},
-            update: (input) => {
-              const activeObject = input.inputMap.activeObject;
-              if (activeObject instanceof Model_Armature) input.tagMap.section.body.classList.remove("hidden");
-              else input.tagMap.section.body.classList.add("hidden");
-            },
-          })
-        );
-
-        libraryJTag.append(body, section);
-
-        const label = JTag.createTag(JTag_Label);
-        label.setLabel("名前");
-        const name = JTag.createTag(JTag_DBInput);
-        this.domMap.armature.name = name;
-
-        name.setValue("未設定");
-
-        libraryJTag.append(section, label);
-        libraryJTag.append(section, name);
-
-        const label_alpha = JTag.createTag(JTag_Label);
-        label_alpha.setLabel("透明度");
-        const slider = JTag.createTag(JTag_Slider);
-        slider.setMin(0);
-        slider.setMax(1);
-        slider.setValue(1);
-        libraryJTag.append(section, label_alpha);
-        libraryJTag.append(section, slider);
+          });
+        };
+        const boneTarget = (): Widget => Select({
+          label: "選択中", disabled: true, value: null, placeholder: "未選択", onChange: () => {},
+          rebuild: boneTarget,
+          observeEvents: [
+            new EditorEvent(EditorEventType.add, editor.project, "models"),
+            new EditorEvent(EditorEventType.delete, editor.project, "models"),
+            ...editor.project.getModelsByType(Model_Armature).flatMap(arm => [
+              // createChangeEvent(arm, ""),
+              new EditorEvent(EditorEventType.add, arm, "bones"),
+              new EditorEvent(EditorEventType.delete, arm, "bones"),
+            ]),
+          ],
+          options: editor.project.getModelsByType(Model_Armature).flatMap(arm =>
+            Object.entries(arm.bones).map(([boneID, bone]) => ({ value: arm.id + "&" + boneID, label: arm.name + ": " + bone.name }))),
+        });
+        children.push(texture(), weights(), boneTarget());
       }
-
-      // editor.observer.add(
-      //   { object: editor.editorState, property: "activeObject" },
-      //   (activeObject: Models | null, lastActiveObject: Models | null) => {
-      //     console.log("更新");
-
-      //     // 初期化
-      //     {
-      //       for (const eventRemoveFunction of this.eventRemoveFunctions) {
-      //         eventRemoveFunction();
-      //       }
-      //       for (const observerRemoveData of this.observerRemoveDatas) {
-      //         editor.observer.remove(observerRemoveData);
-      //       }
-      //       this.eventRemoveFunctions.length = 0;
-      //       this.observerRemoveDatas.length = 0;
-      //     }
-
-      //     if (!(this.domMap.sprite.name && this.domMap.sprite.section && this.domMap.sprite.textureSelect)) return ;
-      //     if (!(this.domMap.armature.name && this.domMap.armature.section)) return ;
-
-      //     if (!activeObject) return ;
-      //     const modelState = editor.editorState.getModelStateByID(activeObject.id);
-
-      //     if (activeObject instanceof Model_Sprite && modelState instanceof SpriteState) {
-      //       this.eventRemoveFunctions.push(
-      //         setEventSelect(
-      //           commandManager,
-      //           this.domMap.sprite.textureSelect,
-      //           activeObject,
-      //           "textureID",
-      //         ),
-      //       );
-
-      //       // this.observerRemoveDatas.push(
-      //       //   editor.observer.add(
-      //       //     { object: activeObject, property: "name" },
-      //       //     (name: string, oldName: string, isInit: boolean) => {
-      //       //       this.domMap.sprite.name.setValue(name);
-      //       //     },
-      //       //     true
-      //       //   ),
-      //       // );
-      //       this.observerRemoveDatas.push(
-      //         editor.observer.add(
-      //           { object: activeObject, property: "textureID" },
-      //           (textureID: number, oldTextureID: number, isInit: boolean) => {
-      //             this.domMap.sprite.textureSelect.setValue(String(textureID));
-      //           },
-      //           true
-      //         ),
-      //       );
-      //       const bonewWeightOptions: Map<ID, JTag_Text> = new Map();
-      //       this.eventRemoveFunctions.push(
-      //         setEventClickForFunction(
-      //           this.domMap.sprite.boneWeightsActionPlus,
-      //           () => {
-      //             const commandRecorder = commandManager.createCommandRecorder();
-      //             const command = commandManager.createCommand(PushItemCommand);
-      //             command.set(activeObject, "boneWeights", Model_Sprite.createBoneWeight({boneID: {aramatureID: "", boneID: ""}, weights: activeObject.vertices.map(v => 0), }));
-      //             commandRecorder.appendCommand(command);
-      //             commandManager.appendCommandRecorder(commandRecorder);
-      //           },
-      //         ),
-      //       );
-      //       this.observerRemoveDatas.push(
-      //         editor.observer.add(
-      //           { object: activeObject, property: "boneWeights" },
-      //           (currentBoneWeights: Model_BoneWeight[], lastBoneWeights: Model_BoneWeight[], isInit: boolean) => {
-      //             libraryJTag.clear(this.domMap.sprite.boneWeights);
-      //             for (const boneWeight of currentBoneWeights) {
-      //               const option = JTag.createTag(JTag_Text);
-      //               option.setText(boneWeight.boneID.boneID !== "" ? `${boneWeight.boneID.boneID}` : "ボーン未選択");
-      //               libraryJTag.append(this.domMap.sprite.boneWeights, option);
-
-      //               bonewWeightOptions.set(boneWeight.id, option);
-
-      //               this.eventRemoveFunctions.push(
-      //                 setEventClick(
-      //                   commandManager,
-      //                   option,
-      //                   modelState,
-      //                   "activeBoneWeightBoneID",
-      //                   boneWeight.id,
-      //                 ),
-      //               );
-      //             }
-      //           },
-      //           true
-      //         ),
-      //       );
-      //       this.observerRemoveDatas.push(
-      //         editor.observer.add(
-      //           { object: modelState, property: "activeBoneWeightBoneID" },
-      //           (currentBoneWeightID: ID, lastBoneWeightID: ID, isInit: boolean) => {
-      //             const option = bonewWeightOptions.get(currentBoneWeightID);
-      //             if (option) option.body.classList.add("active");
-      //             const lastOption = bonewWeightOptions.get(lastBoneWeightID);
-      //             if (lastOption) lastOption.body.classList.remove("active");
-
-      //             const bw = activeObject.boneWeights.find(bw => bw.id == currentBoneWeightID);
-      //             if (bw) {
-      //               this.eventRemoveFunctions.push(
-      //                 setEventSelect(
-      //                   commandManager,
-      //                   this.domMap.sprite.boneWeightTargetSelect,
-      //                   bw,
-      //                   "boneID",
-      //                   (value: string) => stringToBoneReference(value)
-      //                 ),
-      //               );
-      //               // this.observerRemoveDatas.push(
-      //               //   editor.observer.add(
-      //               //     {object: bw.boneID, property: "aramatureID"},
-      //               //     (currentBoneID: BoneReference, lastBoneID: BoneReference, isInit: boolean) => {
-      //               //       this.domMap.sprite.boneWeightTargetSelect.setValue(boneReferenceToString(currentBoneID), false);
-      //               //     },
-      //               //     true
-      //               //   ),
-      //               // );
-      //               this.observerRemoveDatas.push(
-      //                 editor.observer.add(
-      //                   {object: bw.boneID, property: "boneID"},
-      //                   (currentBoneID: BoneReference, lastBoneID: BoneReference, isInit: boolean) => {
-      //                     console.log("更新", currentBoneID, lastBoneID)
-      //                     this.domMap.sprite.boneWeightTargetSelect.setValue(boneReferenceToString(currentBoneID), false);
-      //                   },
-      //                   true
-      //                 ),
-      //               );
-      //             }
-      //           },
-      //           true
-      //         ),
-      //       );
-      //       const section = this.domMap.sprite.section;
-      //       section.body.classList.remove("hidden");
-      //     } else {
-      //       const section = this.domMap.sprite.section;
-      //       section.body.classList.add("hidden");
-      //     }
-      //     if (activeObject instanceof Model_Armature) {
-      //       this.eventRemoveFunctions.push(
-      //         setEventDBInput(
-      //           commandManager,
-      //           this.domMap.armature.name,
-      //           activeObject,
-      //           "name",
-      //         ),
-      //       );
-
-      //       editor.observer.add(
-      //         { object: activeObject, property: "name" },
-      //         () => {
-      //           this.domMap.armature.name.setValue(activeObject.name);
-      //         },
-      //       );
-
-      //       const section = this.domMap.armature.section;
-      //       section.body.classList.remove("hidden");
-      //     } else {
-      //       const section = this.domMap.armature.section;
-      //       section.body.classList.add("hidden");
-      //     }
-      //   },
-      // );
-    }
+      return Column({
+        className: "ui-panel", rebuild: build,
+        observeEvents: [createChangeEvent(editor, "project"), createChangeEvent(editor.editorState, "activeObject")],
+        children: [Header({ children: [Text({ text: "Inspector" })] }), Main({ gap: 8, children })],
+      });
+    };
+    this.handle = ui.mountWidget(parent, build());
+    this.host = parent;
+    this.renderedListHeight = this.spaceData.boneWeightListHeight;
   }
 }

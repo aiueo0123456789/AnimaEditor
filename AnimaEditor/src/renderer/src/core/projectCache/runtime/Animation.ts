@@ -22,16 +22,14 @@ class Path {
   }
 }
 
-export class Runtime_Animation extends Runtime {
-  static referenceResolver = {
+export class Runtime_Animation extends Runtime<Model_Animation> {
+  static override referenceResolver = {
     target: new ReferenceResolver("targetID"),
   };
 
   public target: any;
   public path: Path;
   public keyframes: Keyframe[];
-
-  public override model: Model_Animation;
 
   constructor(model: Model_Animation) {
     super(model);

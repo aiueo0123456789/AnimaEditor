@@ -1,78 +1,24 @@
 import { Runtime_Armature } from "../../../core/projectCache/runtime/Armature";
 import { Runtime_Sprite } from "../../../core/projectCache/runtime/Sprite";
 import { ID } from "../../../editor/Editor";
-import { ArmatureState } from "../../../editor/editorState/state/Armature";
 import { simpleWebGPU } from "../../../util/simpleWebGPU";
-import { Mat3Math, Vec2Math } from "../../../util/vecMath";
-import { View_Camera } from "./Camera";
 import { View_ArmatureRenderData } from "./renderData/ArmatureRenderData";
 import { View_SpriteRenderData } from "./renderData/SpriteRenderData";
-
-export class View_SceneConfigRenderData {
-  public buffer: GPUBuffer;
-  constructor() {
-    this.buffer = simpleWebGPU.createBuffer(4 * 4, ["U"]);
-  }
-}
-
-export class CameraRenderData {
-  public cameraBuffer: GPUBuffer;
-  constructor() {
-    this.cameraBuffer = simpleWebGPU.createBuffer((4 * 3 * 2 + 2 + 2) * 4, [
-      "U",
-    ]);
-  }
-
-  update(camera: View_Camera, width: number, height: number) {
-    const T = Mat3Math.translation(Vec2Math.sub(Vec2Math.create(), camera.position)); // -camPos
-    const R = Mat3Math.rotation(-camera.rotation);
-    const S = Mat3Math.scaling(Vec2Math.create(camera.zoom, camera.zoom));
-    const P = Mat3Math.create(2 / width, 0, 0, 0, 2 / height, 0, 0, 0, 1);
-
-    // multiply(a, b)*v = a*(b*v) なので後ろの引数が先に適用される
-    const RT = Mat3Math.multiply(R, T); // T → R
-    const SRT = Mat3Math.multiply(S, RT); // T → R → S（スケールはカメラ原点中心）
-    const VP = Mat3Math.multiply(P, SRT); // T → R → S → P
-    const IVP = Mat3Math.inverse(VP);
-
-    // パディング込みで詰める
-    const data = new Float32Array(12 * 2 + 2); // 4*3
-    data[0] = VP[0];
-    data[1] = VP[1];
-    data[2] = VP[2];
-    data[3] = 0; // pad
-    data[4] = VP[3];
-    data[5] = VP[4];
-    data[6] = VP[5];
-    data[7] = 0; // pad
-    data[8] = VP[6];
-    data[9] = VP[7];
-    data[10] = VP[8];
-    data[11] = 0; // pad
-
-    data[12] = IVP[0];
-    data[13] = IVP[1];
-    data[14] = IVP[2];
-    data[15] = 0; // pad
-    data[16] = IVP[3];
-    data[17] = IVP[4];
-    data[18] = IVP[5];
-    data[19] = 0; // pad
-    data[20] = IVP[6];
-    data[21] = IVP[7];
-    data[22] = IVP[8];
-    data[23] = 0; // pad
-
-    data[24] = 2 / width;
-    data[25] = 2 / height;
-
-    simpleWebGPU.writeBuffer(this.cameraBuffer, data);
-    // simpleWebGPU.writeBuffer(
-    //   this.cameraBuffer,
-    //   simpleWebGPU.createBitData(VP, ["f32"]),
-    // );
-  }
-}
+import { AddArmatureTool } from "./tool/AddArmatureTool";
+import { AddBoneTool } from "./tool/AddBoneTool";
+import { AddEdgeTool } from "./tool/AddEdgeTool";
+import { AddVertexTool } from "./tool/AddVertexTool";
+import { DeleteBoneTool } from "./tool/DeleteBoneTool";
+import { DeleteEdgeTool } from "./tool/DeleteEdgeTool";
+import { DeleteVertexTool } from "./tool/DeleteVertexTool";
+import { ObjectSelectTool } from "./tool/ObjectSelectTool";
+import { RotationTool } from "./tool/RotationTool";
+import { ScaleTool } from "./tool/ScaleTool";
+import { SelectTool } from "./tool/SelectTool";
+import { Tool } from "./tool/Tool";
+import { TranslateTool } from "./tool/TranslateTool";
+import { WeightPaintTool } from "./tool/WeightPaintTool";
+import { ViewEditModes } from "./ViewEditModes";
 
 export class GizumoRenderData {
   public settingBuffer: GPUBuffer;
@@ -93,17 +39,39 @@ export class GizumoRenderData {
 type ViewRenderDatas = View_SpriteRenderData | View_ArmatureRenderData;
 
 export class UIComponent_View_SpaceData {
-  private renderData: Map<ID, ViewRenderDatas>;
-  private IDtoNumber: Map<ID, number>;
-  public cameraRenderData: CameraRenderData;
-  public gizumoRenderData: GizumoRenderData;
-  constructor() {
-    this.IDtoNumber = new Map();
-    this.renderData = new Map();
-    this.cameraRenderData = new CameraRenderData();
+  public editMode: ViewEditModes = ViewEditModes.OBJECT;
+  public currentTool = "objectSelect";
+  public tools: Tool[] = [
+    new ObjectSelectTool(),
+    new SelectTool(),
+    new TranslateTool(),
+    new RotationTool(),
+    new ScaleTool(),
+    new AddVertexTool(),
+    new DeleteVertexTool(),
+    new AddEdgeTool(),
+    new DeleteEdgeTool(),
+    new AddBoneTool(),
+    new DeleteBoneTool(),
+    new AddArmatureTool(),
+    new WeightPaintTool(),
+  ];
+  public modeToToolMap: Record<ViewEditModes, typeof Tool[]> = {
+    [ViewEditModes.OBJECT]: [ObjectSelectTool, AddArmatureTool],
+    [ViewEditModes.VERTEX]: [SelectTool, TranslateTool, RotationTool, ScaleTool, AddVertexTool, DeleteVertexTool, AddEdgeTool, DeleteEdgeTool],
+    [ViewEditModes.WEIGHTPAINT]: [SelectTool, WeightPaintTool],
+    [ViewEditModes.BONE]: [SelectTool, TranslateTool, RotationTool, ScaleTool, AddBoneTool, DeleteBoneTool],
+    [ViewEditModes.BONEANIMATION]: [SelectTool, TranslateTool, RotationTool, ScaleTool],
+    [ViewEditModes.ERROR]: [],
+  };
+  public renderData: View_SpaceData_RenderData = new View_SpaceData_RenderData();
+}
 
-    this.gizumoRenderData = new GizumoRenderData();
-  }
+// Per-panel GPU resources must not be destroyed by another panel sharing settings.
+export class View_SpaceData_RenderData {
+  private IDtoNumber: Map<ID, number> = new Map();
+  private renderData: Map<ID, ViewRenderDatas> = new Map();
+  public gizumoRenderData = new GizumoRenderData();
 
   private getFreeNumber(): number {
     const used = new Set(this.IDtoNumber.values());
@@ -132,6 +100,19 @@ export class UIComponent_View_SpaceData {
 
   getRenderData(id: ID): ViewRenderDatas | null {
     return this.renderData.get(id) ?? null;
+  }
+
+  public retain(ids: ReadonlySet<ID>): void {
+    for (const [id, data] of this.renderData) if (!ids.has(id)) {
+      data.dispose();
+      this.renderData.delete(id);
+      this.IDtoNumber.delete(id);
+    }
+  }
+
+  public dispose(): void {
+    this.retain(new Set());
+    this.gizumoRenderData.settingBuffer.destroy();
   }
 
   numberIDtoID(numberID: number): ID {

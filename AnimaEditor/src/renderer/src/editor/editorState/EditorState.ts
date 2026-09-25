@@ -4,15 +4,10 @@ import { Model_Sprite } from "../../core/project/model/Sprite";
 import { Model_Texture } from "../../core/project/model/Texture";
 import { Models } from "../../core/project/Project";
 import { ID } from "../Editor";
-import { AnimationState } from "./state/Animation";
-import { ArmatureState } from "./state/Armature";
-import { SpriteState } from "./state/Sprite";
-import { TextureState } from "./state/Texture";
-
-export enum EditModes {
-  Object = "Object",
-  Vertex = "Vertex"
-}
+import { AnimationState } from "./state/States/Animation";
+import { ArmatureState } from "./state/States/Armature";
+import { SpriteState } from "./state/States/Sprite";
+import { TextureState } from "./state/States/Texture";
 
 export type States = SpriteState | ArmatureState | AnimationState | TextureState;
 
@@ -24,16 +19,12 @@ export class EditorState {
   // オブジェクトごとの選択情報を持つオブジェクト
   public states: States[];
 
-  public editMode: EditModes;
-
   constructor() {
     this.activeObject = null;
     this.hoverObject = null;
     this.selectedObjects = [];
 
     this.states = [];
-
-    this.editMode = EditModes.Object;
   }
 
   public setActiveObject(activeObject: Models | null): void {
@@ -70,7 +61,6 @@ export class EditorState {
     this.activeObject = null;
     this.hoverObject = null;
     this.selectedObjects.length = 0;
-    this.editMode = EditModes.Object;
     this.states.length = 0;
   }
 }

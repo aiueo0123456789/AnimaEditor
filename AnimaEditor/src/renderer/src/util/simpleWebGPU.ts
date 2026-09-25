@@ -756,8 +756,8 @@ export class SimpleWebGPU {
       {
         texture,
         origin: [
-          Math.floor(uv[0] * texture.width),
-          Math.floor((1 - uv[1]) * texture.height),
+          Math.max(0, Math.min(texture.width - 1, Math.floor(uv[0] * texture.width))),
+          Math.max(0, Math.min(texture.height - 1, Math.floor((1 - uv[1]) * texture.height))),
         ],
       },
       {
@@ -771,11 +771,12 @@ export class SimpleWebGPU {
       },
     );
     this.device.queue.submit([encoder.finish()]);
-    await readBuffer.mapAsync(GPUMapMode.READ);
-    const data = new Uint32Array(readBuffer.getMappedRange());
-    const value = data[0];
-    readBuffer.unmap();
-    return value;
+    try {
+      await readBuffer.mapAsync(GPUMapMode.READ);
+      const value = new Uint32Array(readBuffer.getMappedRange())[0];
+      readBuffer.unmap();
+      return value;
+    } finally { readBuffer.destroy(); }
   }
 }
 

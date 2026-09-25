@@ -1,4 +1,5 @@
 import { EditorEventType, EventManager } from "../manager/EventManager";
+import { Vec2, Vec2Math } from "../util/vecMath";
 import { AnimaEditor } from "./Editor";
 
 export class EditorAPI {
@@ -153,6 +154,40 @@ export class EditorAPI {
     eventManager.emit(EditorEventType.delete, object, path);
   }
 
+  public addToDictionary(object: unknown, path: string, index: string, value: unknown): void {
+    if (!object) return ;
+    const dividedPath = path.split(".");
+    if (dividedPath.length === 0) return ;
+    const o = this.getProperty(object, path) as Record<string, unknown> | null;
+    if (!o || typeof o !== "object" || Array.isArray(o)) {
+      console.warn("辞書型以外の要素が指定されています", object, path)
+      return ;
+    }
+    o[index] = value;
+
+    const eventManager = this.editor.getManager(EventManager);
+    if (!eventManager) return ;
+
+    eventManager.emit(EditorEventType.add, object, `${path}.${index}`);
+  }
+
+  public deleteInDictionary(object: unknown, path: string, index: string): void {
+    if (!object) return ;
+    const dividedPath = path.split(".");
+    if (dividedPath.length === 0) return ;
+    const o = this.getProperty(object, path) as Record<string, unknown> | null;
+    if (!o || typeof o !== "object" || Array.isArray(o)) {
+      console.warn("辞書型以外の要素が指定されています", object, path)
+      return ;
+    }
+    delete o[index];
+
+    const eventManager = this.editor.getManager(EventManager);
+    if (!eventManager) return ;
+
+    eventManager.emit(EditorEventType.delete, object, `${path}.${index}`);
+  }
+
   public setProperty(object: unknown, path: string, value: unknown): void {
     // if (!(model instanceof Model)) {
     //   console.warn("モデル以外の変更はできません", model);
@@ -168,6 +203,21 @@ export class EditorAPI {
       o = o[p];
     }
     o[lastP] = value;
+
+    const eventManager = this.editor.getManager(EventManager);
+    if (!eventManager) return ;
+
+    eventManager.emit(EditorEventType.change, object, path);
+  }
+
+  public setPropertyVec2(object: unknown, path: string, vec: Vec2): void {
+    // if (!(model instanceof Model)) {
+    //   console.warn("モデル以外の変更はできません", model);
+    //   return ;
+    // }
+    const o = this.getProperty(object, path) as Vec2;
+    if (o?.length !== 2) return ; // Vec2じゃない
+    Vec2Math.copy(vec, o);
 
     const eventManager = this.editor.getManager(EventManager);
     if (!eventManager) return ;

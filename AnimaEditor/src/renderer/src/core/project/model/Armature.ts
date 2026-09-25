@@ -8,8 +8,8 @@ export interface BoneReferenceInput {
   aramatureID: ID,
   boneID: ID
 }
-interface BoneInput {
-  id?: ID,
+export type BoneID = ID;
+export interface Model_BoneInput {
   head?: Vec2,
   tail?: Vec2,
   parentID?: BoneReferenceInput,
@@ -18,7 +18,7 @@ interface BoneInput {
 export interface Model_ArmatureInput extends ModelInput {
   targetID?: number,
   path?: string,
-  bones?: BoneInput[],
+  bones?: Record<BoneID, Model_BoneInput>,
 };
 
 export class BoneReference {
@@ -31,13 +31,11 @@ export class BoneReference {
 }
 
 export class Model_Bone {
-  public id: ID;
   public name: string;
   public head: Vec2;
   public tail: Vec2;
   public parentID: BoneReference | null;
-  constructor(data: BoneInput) {
-    this.id = data.id ?? crypto.randomUUID();
+  constructor(data: Model_BoneInput) {
     this.name = data.name ?? "名称未設定ボーン";
     this.head = data.head ?? Vec2Math.create();
     this.tail = data.tail ?? Vec2Math.create();
@@ -47,14 +45,16 @@ export class Model_Bone {
 }
 
 export class Model_Armature extends Model {
-  public static createBone(data: BoneInput): Model_Bone {
+  public static createBone(data: Model_BoneInput): Model_Bone {
     return new Model_Bone(data);
   }
 
-  public bones: Model_Bone[];
+  public bones: Record<BoneID, Model_Bone>;
   constructor(data: Model_ArmatureInput) {
     super(data);
 
-    this.bones = data.bones ? data.bones.map((bone) => new Model_Bone(bone)) : [];
+    this.bones = Object.fromEntries(
+      Object.entries(data.bones ?? {}).map(([id, bone]) => [id, new Model_Bone(bone)]),
+    );
   }
 }

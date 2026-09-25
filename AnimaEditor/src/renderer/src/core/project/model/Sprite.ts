@@ -9,20 +9,18 @@ interface BBox {
   max: Vec2,
 }
 
-interface BoneWeightInput {
-  id?: ID,
+export type BoneWeightID = ID;
+export interface Model_BoneWeightInput {
   boneID: BoneReferenceInput,
-  weights: number[], // 頂点のweight
+  weights: Record<ID, number>, // 頂点のweight
   name: string,
 }
 
 export class Model_BoneWeight {
-  public id: ID;
   public boneID: BoneReference;
-  public weights: number[];
+  public weights: Record<string, number>;
   public name: string;
-  constructor(data: BoneWeightInput) {
-    this.id = data.id ?? crypto.randomUUID();
+  constructor(data: Model_BoneWeightInput) {
     this.boneID = new BoneReference(data.boneID);
     this.weights = data.weights;
     this.name = data.name ?? "名称未設定";
@@ -30,39 +28,36 @@ export class Model_BoneWeight {
 }
 
 export interface Model_VertexInput {
-  id?: ID,
   co?: Vec2,
 }
 
+export type VertexID = ID;
+export type EdgeID = ID;
+
 export interface Model_EdgeInput {
-  id?: ID,
   vertices: [ID, ID],
 }
 
 export interface Model_SpriteInput extends ModelInput {
   textureID: ModelReferenceInput,
   textureRect?: BBox,
-  vertices?: Model_VertexInput[],
-  silhouetteEdges?: Model_EdgeInput[],
-  edges?: Model_EdgeInput[],
-  boneWeights?: BoneWeightInput[],
+  vertices?: Record<VertexID, Model_VertexInput>,
+  silhouetteEdges?: Record<EdgeID, Model_EdgeInput>,
+  edges?: Record<EdgeID, Model_EdgeInput>,
+  boneWeights?: Record<BoneWeightID, Model_BoneWeightInput>,
   zIndex: number;
 }
 
 export class Model_Vertex {
-  public id: ID;
   public co: Vec2;
   constructor(data: Model_VertexInput) {
-    this.id = data.id ?? crypto.randomUUID();
     this.co = data.co ?? Vec2Math.create();
   }
 }
 
 export class Model_Edge {
-  public id: ID;
   public vertices: [ID, ID];
   constructor(data: Model_EdgeInput) {
-    this.id = data.id ?? crypto.randomUUID();
     this.vertices = data.vertices;
   }
 }
@@ -72,7 +67,7 @@ export class Model_Sprite extends Model {
     return new Model_Vertex(data);
   }
 
-  static createBoneWeight(data: BoneWeightInput) {
+  static createBoneWeight(data: Model_BoneWeightInput) {
     return new Model_BoneWeight(data);
   }
 
@@ -82,10 +77,10 @@ export class Model_Sprite extends Model {
 
   public textureID: ModelReference;
   public textureRect: BBox;
-  public vertices: Model_Vertex[];
-  public silhouetteEdges: Model_Edge[];
-  public edges: Model_Edge[];
-  public boneWeights: Model_BoneWeight[];
+  public vertices: Record<VertexID, Model_Vertex>;
+  public silhouetteEdges: Record<EdgeID, Model_Edge>;
+  public edges: Record<EdgeID, Model_Edge>;
+  public boneWeights: Record<BoneWeightID, Model_BoneWeight>;
   public center: Vec2; // テクスチャの中心
   public zIndex: number;
 
@@ -102,18 +97,26 @@ export class Model_Sprite extends Model {
 
     this.zIndex = data.zIndex ?? 0;
 
-    this.vertices = data.vertices?.map(vertex => Model_Sprite.createVertex(vertex)) ?? [];
-    this.silhouetteEdges = data.silhouetteEdges?.map(edge => Model_Sprite.createEdge(edge)) ?? [];
-    this.edges = data.edges?.map(edge => Model_Sprite.createEdge(edge)) ?? [];
+    this.vertices = Object.fromEntries(Object.entries(data.vertices ?? {}).map(([id, vertex]) => [id, Model_Sprite.createVertex(vertex)]));
+    this.silhouetteEdges = Object.fromEntries(Object.entries(data.silhouetteEdges ?? {}).map(([edgeID, edge]) => [edgeID, Model_Sprite.createEdge(edge)]));
+    this.edges = Object.fromEntries(Object.entries(data.edges ?? {}).map(([edgeID, edge]) => [edgeID, Model_Sprite.createEdge(edge)]));
 
-    this.boneWeights = data.boneWeights ? data.boneWeights.map((boneWeight) => Model_Sprite.createBoneWeight(boneWeight)) : [];
+    this.boneWeights = Object.fromEntries(Object.entries(data.boneWeights ?? {}).map(([boneWeightID, boneWeight]) => [boneWeightID, Model_Sprite.createBoneWeight(boneWeight)]));
   }
 
   get verticesNum() {
-    return this.vertices.length;
+    return Object.keys(this.vertices).length;
   }
 
   get edgesNum() {
-    return this.edges.length;
+    return Object.keys(this.edges).length;
+  }
+
+  get silhouetteEdgesNum() {
+    return Object.keys(this.silhouetteEdges).length;
+  }
+
+  get boneWeightsNum() {
+    return Object.keys(this.boneWeights).length;
   }
 }

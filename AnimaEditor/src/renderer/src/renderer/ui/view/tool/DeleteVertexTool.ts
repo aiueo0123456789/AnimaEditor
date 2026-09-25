@@ -1,67 +1,52 @@
-import { Model_Sprite } from "../../../../core/project/model/Sprite";
-import { DeleteVertexCommandBlock, DeleteVertexCommandBlockInput } from "../../../../editor/commandBlock/DeleteVertex";
-import { AnimaEditor } from "../../../../editor/Editor";
-import { SpriteState } from "../../../../editor/editorState/state/Sprite";
-import { CommandManager } from "../../../../manager/CommandManager";
+import type { AnimaEditor } from "../../../../editor/Editor";
+import type { UIComponent_View } from "../View";
 import { InputManager } from "../../../../manager/InputManager";
-import { PipelineManager } from "../../../../manager/PipelineManager";
-import { simpleWebGPU } from "../../../../util/simpleWebGPU";
-import { UIComponent_View } from "../View";
 import { Tool } from "./Tool";
-
+import { Model_Sprite } from "../../../../core/project/model/Sprite";
+import { SpriteState } from "../../../../editor/editorState/state/States/Sprite";
+import { CommandManager } from "../../../../manager/CommandManager";
+import { RemoveValueCommand } from "../../../../editor/command/primitiveCommand/RemoveValue";
+import { SetPropertiesCommand } from "../../../../editor/command/interactionCommand/SetPropertiesCommand";
 export class DeleteVertexTool extends Tool {
-  constructor() {
-    super();
-  }
-
-  public override activate(): void {
-  }
-
-  public override deactivate(): void {
-  }
-
-  public override update(editor: AnimaEditor, view: UIComponent_View): void {
-    const inputManager = editor.getManager(InputManager);
-    const commandManager = editor.getManager(CommandManager);
-    if (!inputManager || !commandManager) return ;
-
-    const activeObject = editor.editorState.activeObject;
-    if (!activeObject) return ;
-    const modelState = editor.editorState.getModelStateByID(activeObject.id);
-    if (!modelState) return ;
-
-    const isSprite = activeObject instanceof Model_Sprite && modelState instanceof SpriteState;
-
-    if (isSprite) {
-      if (!modelState.selectedVertexIndices.length) return ;
-      if (inputManager.getKeyDown("Mouse0")) {
-        const recorder = commandManager.setCommandRecorder();
-        recorder?.setCommandBlock(DeleteVertexCommandBlock, {
-          sprite: activeObject,
-          deleteVertexIndices: modelState.selectedVertexIndices,
-        } as DeleteVertexCommandBlockInput)
-        commandManager.finishCommandRecorder();
-      }
+  public override update(editor: AnimaEditor, _view: UIComponent_View): void {
+    const model = editor.editorState.activeObject;
+    if (!editor.getManager(InputManager)?.getKeyDown("Mouse0") || !(model instanceof Model_Sprite)) return;
+    const state = editor.editorState.getModelStateByID(model.id);
+    if (!(state instanceof SpriteState)) return;
+    const ids = [...new Set(state.selectedVertexIDs)].filter(id => Boolean(model.vertices[id]));
+    if (!ids.length) return;
+    const manager = editor.getManager(CommandManager);
+    if (!manager || manager.commandRecorder) return;
+    const edgeIDs = Object.entries(model.edges).filter(([, edge]) => edge.vertices.some(id => ids.includes(id))).map(([id]) => id);
+    const silhouetteEdgeIDs = Object.entries(model.silhouetteEdges).filter(([, edge]) => edge.vertices.some(id => ids.includes(id))).map(([id]) => id);
+    const weightEdits = Object.entries(model.boneWeights).map(([boneWeightID, weight]) => ({
+      model, path: `boneWeights.${boneWeightID}.weights`,
+      value: Object.fromEntries(Object.entries(weight.weights).filter(([id]) => !ids.includes(id))),
+    }));
+    const recorder = manager.setCommandRecorder("Delete vertices");
+    if (!recorder) return;
+    for (const id of ids) {
+      recorder.setCommand(RemoveValueCommand, { model, path: "vertices", removeKey: id });
+      if (!recorder.command) { manager.cancelCommandRecorder(); return; }
+      recorder.commitCommand();
     }
-  }
-
-  public override drawOverlay(editor: AnimaEditor, view: UIComponent_View, renderPass: GPURenderPassEncoder): void {
-    const pipelineManager = editor.getManager(PipelineManager);
-    if (!pipelineManager) return ;
-    const translateOverlayPipeline = pipelineManager.getPipelineByID(
-      "Overlay-Tool_TranslateOverlay",
-    );
-    if (translateOverlayPipeline) {
-      renderPass.setBindGroup(
-        0,
-        simpleWebGPU.createGroup(translateOverlayPipeline.groupLayout, [
-          view.spaceData.cameraRenderData.cameraBuffer,
-        ]),
-      );
-      renderPass.setPipeline(translateOverlayPipeline.pipeline);
-      renderPass.draw(4, 1, 0);
-    } else {
-      console.warn("パイプライン: Overlay-Tool_TranslateOverlay がありません")
+    for (const id of edgeIDs) {
+      recorder.setCommand(RemoveValueCommand, { model, path: "edges", removeKey: id });
+      if (!recorder.command) { manager.cancelCommandRecorder(); return; }
+      recorder.commitCommand();
     }
+    for (const id of silhouetteEdgeIDs) {
+      recorder.setCommand(RemoveValueCommand, { model, path: "silhouetteEdges", removeKey: id });
+      if (!recorder.command) { manager.cancelCommandRecorder(); return; }
+      recorder.commitCommand();
+    }
+    recorder.setCommand(SetPropertiesCommand, { edits: [
+        ...weightEdits,
+        { model: state, path: "selectedVertexIDs", value: [] },
+        { model: state, path: "activeVertexID", value: "" },
+      ] });
+    if (!recorder.command) { manager.cancelCommandRecorder(); return; }
+    recorder.commitCommand();
+    manager.commitCommandRecorder();
   }
 }

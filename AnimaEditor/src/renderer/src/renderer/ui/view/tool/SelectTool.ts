@@ -1,181 +1,78 @@
-import { Model_Armature } from "../../../../core/project/model/Armature";
 import { Model_Sprite } from "../../../../core/project/model/Sprite";
-import { ClearCommand, ClearCommandInput } from "../../../../editor/command/Clear";
-import { ConcatArrayCommand, ConcatArrayCommandInput, ConcatArrayCommandUpdate } from "../../../../editor/command/ConcatArray";
-import { PushElementCommand, PushElementCommandInput } from "../../../../editor/command/PushElement";
-import { AnimaEditor } from "../../../../editor/Editor";
-import { ArmatureState } from "../../../../editor/editorState/state/Armature";
-import { SpriteState } from "../../../../editor/editorState/state/Sprite";
-import { CommandManager, CommandRecorder } from "../../../../manager/CommandManager";
+import { Model_Armature } from "../../../../core/project/model/Armature";
+import { SpriteState } from "../../../../editor/editorState/state/States/Sprite";
+import { ArmatureState } from "../../../../editor/editorState/state/States/Armature";
+import { SetPropertiesCommand } from "../../../../editor/command/interactionCommand/SetPropertiesCommand";
+import type { AnimaEditor, ID } from "../../../../editor/Editor";
+import type { CommandRecorder } from "../../../../manager/CommandManager";
 import { InputManager } from "../../../../manager/InputManager";
-import { Vec2, Vec2Math } from "../../../../util/vecMath";
-import { UIComponent_View } from "../View";
-import { Tool } from "./Tool";
+import type { UIComponent_View } from "../View";
+import { Vec2Math, type Vec2 } from "../../../../util/vecMath";
+import { DragTool } from "./DragTool";
 
-export class SelectTool extends Tool {
-  private dragging: boolean;
-  private startMousePos: Vec2;
-
-  private commandRecorder: CommandRecorder | null;
-
-  constructor() {
-    super();
-    this.dragging = false;
-    this.startMousePos = Vec2Math.create();
-
-    this.commandRecorder = null;
-  }
-
-  public override activate(): void {
-  }
-
-  public override deactivate(): void {
-  }
-
-  public override update(editor: AnimaEditor, view: UIComponent_View): void {
-    const inputManager = editor.getManager(InputManager);
-    const commandManager = editor.getManager(CommandManager);
-    if (!inputManager || !commandManager) return ;
-
-    const activeObject = editor.editorState.activeObject;
-    if (!activeObject) return ;
-    const modelState = editor.editorState.getModelStateByID(activeObject.id);
-    if (!modelState) return ;
-
-    const isSprite = activeObject instanceof Model_Sprite && modelState instanceof SpriteState;
-    const isAramature = activeObject instanceof Model_Armature && modelState instanceof ArmatureState;
-
-    const mouseWorldPosition = view.clientToWorld(inputManager.mousePosition);
-    if (inputManager.getKeyDown("Mouse0")) {
-      this.dragging = false;
-      this.commandRecorder = commandManager.setCommandRecorder();
-      if (!this.commandRecorder) return ;
-      Vec2Math.copy(mouseWorldPosition, this.startMousePos);
-      if (!inputManager.getKey("ShiftLeft")) {
-        if (isSprite) {
-          // 選択を解除
-          this.commandRecorder.setCommand(ClearCommand, {
-            model: modelState,
-            path: "selectedVertexIndices"
-          } as ClearCommandInput);
-          this.commandRecorder.finishCommand();
-        } else if (isAramature) {
-          // ヘッド・テールの選択を解除
-          this.commandRecorder.setCommand(ClearCommand, {
-            model: modelState,
-            path: "selectedHead"
-          } as ClearCommandInput);
-          this.commandRecorder.finishCommand();
-          this.commandRecorder.setCommand(ClearCommand, {
-            model: modelState,
-            path: "selectedTail"
-          } as ClearCommandInput);
-          this.commandRecorder.finishCommand();
-        }
-      }
+export class SelectTool extends DragTool {
+  private points: { position: Vec2; id: ID; group: number }[] = [];
+  private bones: { id: ID; head: Vec2; tail: Vec2 }[] = [];
+  private initial: ID[][] = [];
+  private box = false;
+  protected start(editor: AnimaEditor, _view: UIComponent_View, recorder: CommandRecorder): void {
+    const model = editor.editorState.activeObject;
+    if (!model) return;
+    const state = editor.editorState.getModelStateByID(model.id);
+    const input = editor.getManager(InputManager)!;
+    const additive = input.getKey("ShiftLeft") || input.getKey("ShiftRight");
+    this.points = [];
+    this.bones = [];
+    let paths: string[] = [];
+    if (model instanceof Model_Sprite && state instanceof SpriteState) {
+      paths = ["selectedVertexIDs"];
+      this.initial = [additive ? [...state.selectedVertexIDs] : []];
+      this.points = Object.entries(model.vertices).map(([id, vertex]) => ({ position: [...vertex.co], id, group: 0 }));
+    } else if (model instanceof Model_Armature && state instanceof ArmatureState) {
+      paths = ["selectedHeadIDs", "selectedTailIDs"];
+      this.initial = additive ? [[...state.selectedHeadIDs], [...state.selectedTailIDs]] : [[], []];
+      Object.entries(model.bones).forEach(([id, bone]) => {
+        this.bones.push({ id, head: [...bone.head], tail: [...bone.tail] });
+        this.points.push({ position: [...bone.head], id, group: 0 }, { position: [...bone.tail], id, group: 1 });
+      });
     }
-
-    if (!this.commandRecorder) return ;
-
-    if (!this.dragging && inputManager.dragging) {
-      // 範囲選択に切り替え
-      this.dragging = true;
-      console.log("複数選択");
-    }
-
-    if (this.dragging) { // 範囲選択
-      if (inputManager.getKey("Mouse0")) {
-        if (activeObject instanceof Model_Sprite && modelState instanceof SpriteState) {
-          if (!(this.commandRecorder.command instanceof ConcatArrayCommand)) {
-            this.commandRecorder.setCommand(ConcatArrayCommand, {
-              model: modelState,
-              path: "selectedVertexIndices",
-              newElements: [],
-            } as ConcatArrayCommandInput);
-            this.commandRecorder.finishCommand();
-          }
-          let selectVertices: number[] = [];
-          for (let vi = 0; vi < activeObject.verticesNum; vi++) {
-            const vertex = activeObject.vertices[vi];
-            const min = Vec2Math.min(this.startMousePos, mouseWorldPosition);
-            const max = Vec2Math.max(this.startMousePos, mouseWorldPosition);
-            if (
-              min[0] < vertex.co[0] &&
-              min[1] < vertex.co[1] &&
-              max[0] > vertex.co[0] &&
-              max[1] > vertex.co[1]
-            ) {
-              selectVertices.push(vi);
-            }
-          }
-          this.commandRecorder.updateCommand({newElements: selectVertices} as ConcatArrayCommandUpdate);
-        } else if (activeObject instanceof Model_Armature && modelState instanceof ArmatureState) {
-        }
-      }
-      if (inputManager.getKeyUp("Mouse0")) {
-        commandManager.finishCommandRecorder();
-        this.commandRecorder = null;
-      }
+    this.box = false;
+    if (paths.length) recorder.setCommand(SetPropertiesCommand, { edits: paths.map((path, i) => ({ model: state, path, value: this.initial[i] })) });
+  }
+  protected move(_editor: AnimaEditor, view: UIComponent_View, input: InputManager, recorder: CommandRecorder): void {
+    const point = view.clientToWorld(input.mousePosition);
+    this.box ||= Vec2Math.distance(this.origin, point) * view.camera.zoom > 4;
+    const selected = this.initial.map(indices => new Set(indices));
+    if (this.box) {
+      const min = Vec2Math.min(this.origin, point), max = Vec2Math.max(this.origin, point);
+      for (const item of this.points) if (item.position[0] >= min[0] && item.position[0] <= max[0] && item.position[1] >= min[1] && item.position[1] <= max[1]) selected[item.group].add(item.id);
     } else {
-      if (inputManager.getKeyUp("Mouse0")) {
-        if (activeObject instanceof Model_Sprite && modelState instanceof SpriteState) {
-          let closestVertexDist = Infinity;
-          let closestVertexIndex = -1;
-          for (let vi = 0; vi < activeObject.verticesNum; vi++) {
-            const vertex = activeObject.vertices[vi];
-            const dist = Vec2Math.distance(
-              vertex.co,
-              mouseWorldPosition,
-            );
-            if (dist < closestVertexDist) {
-              closestVertexIndex = vi;
-              closestVertexDist = dist;
-            }
-          }
-          if (closestVertexIndex !== -1) {
-            this.commandRecorder.setCommand(PushElementCommand, {
-              model: modelState,
-              path: "selectedVertexIndices",
-              newElement: closestVertexIndex
-            } as PushElementCommandInput);
-            this.commandRecorder.finishCommand();
-            commandManager.finishCommandRecorder();
-          }
-        } else if (activeObject instanceof Model_Armature && modelState instanceof ArmatureState) {
-          let closestVertexDist = Infinity;
-          let closestVertexKind: "head" | "tail" = "head";
-          let closestBoneIndex = -1;
-          for (let bi = 0; bi < activeObject.bones.length; bi++) {
-            const bone = activeObject.bones[bi];
-            const headDist = Vec2Math.distance(bone.head, mouseWorldPosition);
-            const tailDist = Vec2Math.distance(bone.tail, mouseWorldPosition);
-            if (tailDist < headDist) {
-              if (tailDist < closestVertexDist) {
-                closestBoneIndex = bi;
-                closestVertexKind = "tail";
-                closestVertexDist = tailDist;
-              }
-            } else {
-              if (headDist < closestVertexDist) {
-                closestBoneIndex = bi;
-                closestVertexKind = "head";
-                closestVertexDist = headDist;
-              }
-            }
-          }
-          if (closestBoneIndex !== -1) {
-            this.commandRecorder.setCommand(PushElementCommand, {
-              model: modelState,
-              path: closestVertexKind === "head" ? "selectedHead" : "selectedTail",
-              newElement: closestBoneIndex
-            } as PushElementCommandInput);
-            this.commandRecorder.finishCommand();
-            commandManager.finishCommandRecorder();
-          }
+      let closest: typeof this.points[number] | undefined;
+      let distance = 12 / view.camera.zoom;
+      for (const item of this.points) {
+        const d = Vec2Math.distance(item.position, point);
+        if (d <= distance) { closest = item; distance = d; }
+      }
+      if (closest) selected[closest.group].add(closest.id);
+      else {
+        // ボーン選択処理
+        let boneID: ID | undefined;
+        let nearest = 8 / view.camera.zoom;
+        for (const bone of this.bones) {
+          const dx = bone.tail[0] - bone.head[0], dy = bone.tail[1] - bone.head[1];
+          const lengthSquared = dx * dx + dy * dy;
+          if (!lengthSquared) continue;
+          const t = Math.max(0, Math.min(1,
+            ((point[0] - bone.head[0]) * dx + (point[1] - bone.head[1]) * dy) / lengthSquared));
+          const distance = Math.hypot(point[0] - bone.head[0] - t * dx, point[1] - bone.head[1] - t * dy);
+          if (distance <= nearest) { boneID = bone.id; nearest = distance; }
+        }
+        if (boneID !== undefined) {
+          selected[0].add(boneID);
+          selected[1].add(boneID);
         }
       }
     }
+    recorder.updateCommand({ values: selected.map(indices => [...indices]) });
   }
-
-  public override drawOverlay(editor: AnimaEditor, view: UIComponent_View, renderPass: GPURenderPassEncoder): void {}
 }

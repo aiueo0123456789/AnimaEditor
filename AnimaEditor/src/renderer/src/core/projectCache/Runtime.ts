@@ -1,9 +1,9 @@
 import { ID } from "../../editor/Editor";
-import { Models } from "../project/Project";
+import { Model } from "../project/Model";
 
 export class ReferenceResolver {
-  public static SOURCE = { OBJECT: "OBJECT", BONE: "BONE" };
-  public static PATH = { ARRAY: "ARRAY" };
+  public static readonly SOURCE = { OBJECT: "OBJECT", BONE: "BONE" };
+  public static readonly PATH = { ARRAY: "ARRAY", DICTIONARY: "DICTIONARY" };
 
   public id: string;
   constructor(id: string) {
@@ -11,14 +11,14 @@ export class ReferenceResolver {
   }
 }
 
-export class Runtime {
+export class Runtime<T extends Model> {
   public isRuntime: boolean;
-  public model: Models;
+  public model: T;
   public id: ID;
 
   public static referenceResolver: any;
 
-  constructor(model: Models) {
+  constructor(model: T) {
     this.isRuntime = true;
 
     this.id = model.id;

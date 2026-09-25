@@ -1,7 +1,6 @@
 import { AnimaEditor } from "../../../editor/Editor";
 import { Mat3, Mat3Math, Vec2, Vec2Math } from "../../../util/vecMath";
-import { Model_Bone } from "../../project/model/Armature";
-import { Runtime_Armature, Runtime_Bone } from "../../projectCache/runtime/Armature";
+import { Runtime_Armature } from "../../projectCache/runtime/Armature";
 import { System } from "../System";
 
 function calcBoneTransform(head: Vec2, tail: Vec2): {
@@ -83,26 +82,40 @@ export class System_Armature extends System {
     for (const runtime of targets) {
       const model = runtime.model;
 
-      if (runtime.bones.length !== model.bones.length) {
-        const takeOverBones: Runtime_Bone[] = [];
-        const addBones: Model_Bone[] = [];
-        for (const mb of model.bones) {
-          const rb = runtime.getBoneByID(mb.id);
-          if (rb) takeOverBones.push(rb);
-          else addBones.push(mb);
+      const previous = new Map(runtime.bones.map(bone => [bone.boneID, bone]));
+      const remaining = new Map(Object.entries(model.bones));
+      const ordered: [string, typeof model.bones[string]][] = [];
+      while (remaining.size) {
+        let progressed = false;
+        for (const [boneID, bone] of remaining) {
+          const parent = bone.parentID;
+          if (!parent || parent.aramatureID !== model.id || !remaining.has(parent.boneID)) {
+            ordered.push([boneID, bone]);
+            remaining.delete(boneID);
+            progressed = true;
+          }
         }
-        runtime.bones.length = 0;
-        for (const rb of takeOverBones) {
-          runtime.bones.push(rb);
-        }
-        for (const mb of addBones) {
-          runtime.bones.push(Runtime_Armature.createBone(mb));
+        if (!progressed) {
+          ordered.push(...remaining);
+          remaining.clear();
         }
       }
+      const structureChanged = runtime.bones.length !== ordered.length ||
+        ordered.some(([boneID, bone], index) =>
+          runtime.bones[index]?.boneID !== boneID || runtime.bones[index]?.model !== bone);
+      if (structureChanged) {
+        runtime.bones = ordered.map(([boneID, bone]) => {
+          const current = previous.get(boneID);
+          if (current?.model === bone) return current;
+          return Runtime_Armature.createBone(boneID, bone);
+        });
+        runtime.boneIDMap.clear();
+        for (let bi = 0; bi < runtime.bones.length; bi++) runtime.boneIDMap.set(runtime.bones[bi].boneID, bi);
+      }
 
-      for (let bi = 0; bi < model.bones.length; bi++) {
+      for (let bi = 0; bi < runtime.bones.length; bi++) {
         const rb = runtime.bones[bi];
-        const transformValue = calcBoneTransform(model.bones[bi].head, model.bones[bi].tail);
+        const transformValue = calcBoneTransform(rb.model.head, rb.model.tail);
         Vec2Math.copy(transformValue.position, rb.base.position);
         Vec2Math.copy(transformValue.scale, rb.base.scale);
         rb.base.rotation = transformValue.rotation;
@@ -110,6 +123,10 @@ export class System_Armature extends System {
         const baseWorldMatrix = getMatrixByTransform(rb.base.position, rb.base.rotation, rb.base.scale);
         Mat3Math.copy(baseWorldMatrix, rb.base.worldMatrix);
         Mat3Math.inverse(baseWorldMatrix, rb.base.inverWorldMatrix);
+      }
+      for (const rb of runtime.bones) {
+        const parent = rb.model.parentID;
+        rb.parent = parent?.aramatureID === model.id ? runtime.getBoneByID(parent.boneID) : null;
       }
       for (const rb of runtime.bones) {
         if (rb.parent) Mat3Math.multiply(rb.parent.base.inverWorldMatrix, rb.base.worldMatrix, rb.base.localMatrix);

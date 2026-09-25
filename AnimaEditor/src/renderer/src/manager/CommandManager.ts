@@ -1,79 +1,77 @@
 
-import { ClearCommand, ClearCommandInput } from "../editor/command/Clear";
-import { Command, CommandReturn } from "../editor/command/Command";
-import { ConcatArrayCommand, ConcatArrayCommandInput, ConcatArrayCommandUpdate } from "../editor/command/ConcatArray";
-import { InsertElementCommand, InsertElementCommandInput } from "../editor/command/InsertElement";
-import { PushElementCommand, PushElementCommandInput } from "../editor/command/PushElement";
-import { RemoveItemCommand, RemoveItemCommandInput } from "../editor/command/RemoveItem";
-import { RemoveItemsCommand, RemoveItemsCommandInput } from "../editor/command/RemoveItems";
-import { SetPropertyCommand, SetPropertyCommandInput, SetPropertyCommandUpdate } from "../editor/command/SetProperty";
-import { SetVec2Command } from "../editor/command/SetVec2";
-import { AddObjectCommandBlock, AddObjectCommandBlockInput } from "../editor/commandBlock/AddObject";
-import { CommandBlock } from "../editor/commandBlock/CommandBlock";
-import { DeleteVertexCommandBlock, DeleteVertexCommandBlockInput } from "../editor/commandBlock/DeleteVertex";
-import { SetActiveObjectCommandBlock, SetActiveObjectCommandBlockInput } from "../editor/commandBlock/SetActiveObject";
-import { SetProjectCommandBlock, SetProjectCommandBlockInput } from "../editor/commandBlock/SetProject";
+import { InteractionCommand, InteractionCommandInput } from "../editor/command/interactionCommand/InteractionCommand";
+import { PrimitiveCommand, CommandReturn, PrimitiveCommandInput } from "../editor/command/primitiveCommand/PrimitiveCommand";
+import { ConcatArrayCommandUpdate } from "../editor/command/primitiveCommand/ConcatArray";
+import { SetPropertyCommandUpdate } from "../editor/command/primitiveCommand/SetProperty";
+import { SetVec2CommandUpdate } from "../editor/command/primitiveCommand/SetVec2";
 import { AnimaEditor } from "../editor/Editor";
 import { Manager } from "./Manager";
+import { TranslateCommandUpdate } from "../editor/command/interactionCommand/TranslateCommand";
+import type { ClearCommandUpdate } from "../editor/command/primitiveCommand/Clear";
+import type { PushElementCommandUpdate } from "../editor/command/primitiveCommand/PushElement";
+import type { InsertElementCommandUpdate } from "../editor/command/primitiveCommand/InsertElement";
+import type { RemoveItemCommandUpdate } from "../editor/command/primitiveCommand/RemoveItem";
+import type { RemoveItemsCommandUpdate } from "../editor/command/primitiveCommand/RemoveItems";
+import type { SetActiveObjectCommandUpdate } from "../editor/command/interactionCommand/SetActiveObjectCommand";
+import type { SetProjectCommandUpdate } from "../editor/command/interactionCommand/SetProjectCommand";
+import type { BoneExtrudeCommandUpdate } from "../editor/command/interactionCommand/BoneExtrudeCommand";
+import type { AddBoneWeightPaintCommandUpdate } from "../editor/command/interactionCommand/AddWeightPaintCommand";
+import type { TransformCommandUpdate } from "../editor/command/interactionCommand/TransformCommand";
+import type { SetPropertiesUpdate } from "../editor/command/interactionCommand/SetPropertiesCommand";
+import type { AddValueCommandUpdate } from "../editor/command/primitiveCommand/AddValue";
+import type { RemoveValueCommandUpdate } from "../editor/command/primitiveCommand/RemoveValue";
+import type { AddDictionaryValuesCommandUpdate } from "../editor/command/interactionCommand/AddDictionaryValuesCommand";
 
-export type Commands = ClearCommand | ConcatArrayCommand | InsertElementCommand | PushElementCommand | RemoveItemCommand | RemoveItemsCommand | SetPropertyCommand | SetVec2Command;
-export type CommandTypes = typeof ClearCommand | typeof ConcatArrayCommand | typeof InsertElementCommand | typeof PushElementCommand | typeof RemoveItemCommand | typeof RemoveItemsCommand | typeof SetPropertyCommand | typeof SetVec2Command;
-export type CommandInputs = ClearCommandInput | ConcatArrayCommandInput | InsertElementCommandInput | PushElementCommandInput | RemoveItemCommandInput | RemoveItemsCommandInput | SetPropertyCommandInput | SetVec2CommandInput;
-export type CommandUpdates = ConcatArrayCommandUpdate | SetPropertyCommandUpdate;
+type PrimitiveCommandInputs = PrimitiveCommandInput
+type InsertElementCommandInputs = InteractionCommandInput;
+export type CommandInputs = PrimitiveCommandInputs | InsertElementCommandInputs;
+export type CommandUpdates = ClearCommandUpdate | PushElementCommandUpdate | InsertElementCommandUpdate |
+  RemoveItemCommandUpdate | RemoveItemsCommandUpdate | ConcatArrayCommandUpdate | SetPropertyCommandUpdate |
+  SetVec2CommandUpdate | TranslateCommandUpdate | SetActiveObjectCommandUpdate | SetProjectCommandUpdate |
+  BoneExtrudeCommandUpdate | AddBoneWeightPaintCommandUpdate | TransformCommandUpdate | SetPropertiesUpdate |
+  AddValueCommandUpdate | RemoveValueCommandUpdate | AddDictionaryValuesCommandUpdate;
 
-export type CommandBlocks = AddObjectCommandBlock | SetActiveObjectCommandBlock | SetProjectCommandBlock | DeleteVertexCommandBlock;
-export type CommandBlockInputs = AddObjectCommandBlockInput | SetActiveObjectCommandBlockInput | SetProjectCommandBlockInput | DeleteVertexCommandBlockInput;
-
+function isSubclassOf(child: Function, parent: Function): boolean {
+  return child.prototype instanceof parent || child === parent;
+}
 export class CommandRecorder {
-  public editor: AnimaEditor;
-  public command: (Command) | null; // 現在処理中のコマンド
-  public commands: (Command)[];
-  public isFinish: boolean;
+  private editor: AnimaEditor;
+  public command: (PrimitiveCommand | InteractionCommand) | null; // 現在処理中のコマンド
+  public commands: (PrimitiveCommand | InteractionCommand)[];
+  public isCommited: boolean;
+  private applied = true;
   public name: string;
   constructor(name: string, editor: AnimaEditor) {
     this.name = name;
     this.editor = editor;
     this.command = null;
     this.commands = [];
-    this.isFinish = false;
+    this.isCommited = false;
   }
 
-  setCommandBlock<T extends CommandBlock>(commandBlockClass: new (...args: any[]) => T, setData: CommandBlockInputs): void {
-    if (this.isFinish) {
+  setCommand<T extends (PrimitiveCommand | InteractionCommand)>(CommandClass: new (...args: any[]) => T, data: CommandInputs): void {
+    if (this.isCommited) {
       console.error("このコマンドレコーダーはすでに閉じられています");
       return ;
     }
     if (this.command) {
-      console.error("未終了のコマンドが存在します");
+      console.error("未終了のコマンドが存在します", this.command);
       return ;
     }
-    const commandBlock = new commandBlockClass(this.editor);
-    commandBlock.set(setData)
-    for (const commandData of commandBlock.commandDatas) {
-      const command = new commandData.command(this.editor.api);
-      const result = command.set(commandData.setData);
-      if (result !== CommandReturn.FINISHED) console.warn("何か問題が発生しました")
-      command.finish();
-      this.commands.push(command);
-    }
-  }
-
-  setCommand<T extends Command>(commandClass: new (...args: any[]) => T, setData: CommandInputs): void {
-    if (this.isFinish) {
-      console.error("このコマンドレコーダーはすでに閉じられています");
+    if (isSubclassOf(CommandClass, PrimitiveCommand)) this.command = new CommandClass(this.editor.api, data);
+    else if (isSubclassOf(CommandClass, InteractionCommand)) this.command = new CommandClass(this.editor, data);
+    else {
+      console.warn("このクラスはコマンドを継承していません", CommandClass);
       return ;
     }
-    if (this.command) {
-      console.error("未終了のコマンドが存在します");
-      return ;
+    if (this.command.begin() === CommandReturn.ERROR) {
+      this.command.hasError = true;
+      this.command = null;
     }
-    const c = new commandClass(this.editor.api);
-    c.set(setData);
-    this.command = c;
   }
 
   updateCommand(data: CommandUpdates): void {
-    if (this.isFinish) {
+    if (this.isCommited) {
       console.error("このコマンドレコーダーはすでに終了しています");
       return ;
     }
@@ -84,8 +82,8 @@ export class CommandRecorder {
     this.command.update(data);
   }
 
-  finishCommand(): void {
-    if (this.isFinish) {
+  commitCommand(): void {
+    if (this.isCommited) {
       console.error("このコマンドレコーダーはすでに終了しています");
       return ;
     }
@@ -93,47 +91,83 @@ export class CommandRecorder {
       console.warn("コマンドは設定されていません");
       return ;
     }
-    this.command.finish();
+    this.command.commit();
     this.commands.push(this.command);
     this.command = null;
   }
 
-  finish(): boolean {
+  cancelCommand(): void {
+    if (this.isCommited) {
+      console.error("このコマンドレコーダーはすでに終了しています");
+      return ;
+    }
+    if (!this.command) {
+      console.warn("コマンドは設定されていません");
+      return ;
+    }
+    if (this.command.cancel() === CommandReturn.ERROR) return;
+    this.command.commit();
+    this.command = null;
+  }
+
+  commit(): boolean {
+    if (this.isCommited) return false;
     if (this.command) {
       console.warn("処理中のコマンドがあるためレコーダーは終了できません");
       return false;
     }
-    this.isFinish = true;
+    this.isCommited = true;
     return true;
-  }
-
-  private undoCommand(command: Command): CommandReturn {
-    return command.undo();
   }
 
   undo(): boolean {
-    for (const command of this.commands.reverse()) {
-      const result = this.undoCommand(command);
-      if (result === CommandReturn.ERROR) return false;
-      else if (result === CommandReturn.CANCELLED) return false;
-      // else if (result === CommandReturn.FINISHED)
+    if (!this.isCommited || !this.applied) return false;
+    const undone: (PrimitiveCommand | InteractionCommand)[] = [];
+    for (const command of [...this.commands].reverse()) {
+      const result = command.undo();
+      if (result === CommandReturn.ERROR) {
+        for (const previous of undone.reverse()) previous.redo();
+        return false;
+      }
+      undone.push(command);
     }
+    this.applied = false;
     return true;
   }
 
-  private executeCommand(command: Command): CommandReturn {
-    return command.execute();
-  }
-
-  execute(): boolean {
+  redo(): boolean {
+    // Only replay a closed recorder that has been undone.
+    if (!this.isCommited || this.applied) return false;
+    const replayed: (PrimitiveCommand | InteractionCommand)[] = [];
     for (const command of this.commands) {
-      const result = this.executeCommand(command);
+      const result = command.redo();
       if (result === CommandReturn.ERROR) {
         console.error("コマンド", command, "でエラーが発生しました");
+        for (const previous of replayed.reverse()) previous.undo();
         return false;
-      } else if (result === CommandReturn.CANCELLED) console.warn("コマンド", command, "でキャンセルが発生しました");
-      // else if (result === CommandReturn.FINISHED)
+      }
+      replayed.push(command);
     }
+    this.applied = true;
+    return true;
+  }
+
+  cancel(): boolean {
+    if (this.isCommited) return false;
+    if (this.command) {
+      const result = this.command.cancel();
+      if (result === CommandReturn.ERROR) return false;
+      this.command.commit();
+      this.command = null;
+    }
+    while (this.commands.length) {
+      const command = this.commands[this.commands.length - 1];
+      const result = command.undo();
+      if (result === CommandReturn.ERROR) return false;
+      this.commands.pop();
+    }
+    this.isCommited = true;
+    this.applied = false;
     return true;
   }
 }
@@ -155,71 +189,68 @@ export class CommandManager extends Manager {
   }
 
   setCommandRecorder(recorderName: string = "未設定"): CommandRecorder | null {
-    console.trace();
     if (this.commandRecorder) {
       console.error("未終了のコマンドレコーダーが存在します", this.commandRecorder);
       return null;
     }
     this.commandRecorder = new CommandRecorder(recorderName, this.editor);
-    console.log("レコーダーが設定されました", this.commandRecorder);
     return this.commandRecorder;
   }
 
-  finishCommandRecorder(): void {
+  cancelCommandRecorder(): void {
     if (!this.commandRecorder) {
       console.warn("コマンドレコーダーは設定されていません");
       return ;
     }
-    if (!this.commandRecorder.finish()) {
+    if (!this.commandRecorder.cancel()) {
       console.warn("コマンドレコーダーの終了に失敗しました");
       return ;
     }
-    this.commandRecorders.push(this.commandRecorder);
+    this.commandRecorder = null;
+  }
+
+  commitCommandRecorder(): void {
+    if (!this.commandRecorder) {
+      console.warn("コマンドレコーダーは設定されていません");
+      return ;
+    }
+    if (!this.commandRecorder.commit()) {
+      console.warn("コマンドレコーダーの終了に失敗しました");
+      return ;
+    }
+    if (this.commandRecorder.commands.length) this.commandRecorders.push(this.commandRecorder);
     this.commandRecorder = null;
   }
 
   undo() {
-    if (this.commandRecorders.length) {
-      console.warn("未実行のコマンドがあります", [...this.commandRecorders])
-    }
-    if (this.undoStack.length > 0) {
-      const commandRecorder = this.undoStack.pop();
-      if (commandRecorder instanceof CommandRecorder) {
-        commandRecorder.undo();
-        this.redoStack.push(commandRecorder);
-      } else {
-        this.undo();
-      }
+    if (this.commandRecorder) return;
+    this.execute();
+    const recorder = this.undoStack[this.undoStack.length - 1];
+    if (recorder?.undo()) {
+      this.undoStack.pop();
+      this.redoStack.push(recorder);
     }
   }
 
   redo() {
-    if (this.redoStack.length > 0) {
-      const commandRecorder = this.redoStack.pop();
-      if (commandRecorder instanceof CommandRecorder) {
-        commandRecorder.execute();
-        this.undoStack.push(commandRecorder);
-      } else {
-        // もしコマンドが壊れていたらさらに前にする
-        this.redo();
-      }
+    if (this.commandRecorder) return;
+    this.execute();
+    const recorder = this.redoStack[this.redoStack.length - 1];
+    if (recorder?.redo()) {
+      this.redoStack.pop();
+      this.undoStack.push(recorder);
     }
   }
 
-  public update(): void {
-    const successCommandRecorders: CommandRecorder[] = [];
-    while (this.commandRecorders.length != 0) {
-      const commandRecorder = this.commandRecorders.shift();
-      if (!(commandRecorder instanceof CommandRecorder)) continue ;
-      const result = commandRecorder.execute();
-      console.log("レコーダー", commandRecorder, "が実行されました")
-      if (result) successCommandRecorders.push(commandRecorder);
+  public execute(): void {
+    for (const recorder of this.commandRecorders.splice(0)) {
+      if (!recorder.isCommited || !recorder.commands.length) continue;
+      this.undoStack.push(recorder);
+      this.redoStack.length = 0;
     }
-    if (successCommandRecorders.length) {
-      for (const commandRecorder of successCommandRecorders) {
-        this.undoStack.push(commandRecorder);
-      }
-      this.redoStack.length = 0; // 新しい操作をしたらRedoはリセット
-    }
+  }
+
+  public override update(): void {
+    this.execute();
   }
 }

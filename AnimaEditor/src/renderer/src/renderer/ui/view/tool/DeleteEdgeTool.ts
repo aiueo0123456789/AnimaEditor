@@ -1,74 +1,28 @@
-import { Model_Sprite } from "../../../../core/project/model/Sprite";
-import { RemoveItemsCommand } from "../../../../editor/command/RemoveItems";
-import { AnimaEditor } from "../../../../editor/Editor";
-import { SpriteState } from "../../../../editor/editorState/state/Sprite";
-import { CommandManager } from "../../../../manager/CommandManager";
+import type { AnimaEditor } from "../../../../editor/Editor";
+import type { UIComponent_View } from "../View";
 import { InputManager } from "../../../../manager/InputManager";
-import { PipelineManager } from "../../../../manager/PipelineManager";
-import { simpleWebGPU } from "../../../../util/simpleWebGPU";
-import { UIComponent_View } from "../View";
 import { Tool } from "./Tool";
-
+import { Model_Sprite } from "../../../../core/project/model/Sprite";
+import { SpriteState } from "../../../../editor/editorState/state/States/Sprite";
+import { CommandManager } from "../../../../manager/CommandManager";
+import { RemoveValueCommand } from "../../../../editor/command/primitiveCommand/RemoveValue";
 export class DeleteEdgeTool extends Tool {
-  constructor() {
-    super();
-  }
-
-  public override activate(): void {
-  }
-
-  public override deactivate(): void {
-  }
-
-  public override update(editor: AnimaEditor, view: UIComponent_View): void {
-    const inputManager = editor.getManager(InputManager);
-    const commandManager = editor.getManager(CommandManager);
-    if (!inputManager || !commandManager) return ;
-
-    const activeObject = editor.editorState.activeObject;
-    if (!activeObject) return ;
-    const modelState = editor.editorState.getModelStateByID(activeObject.id);
-    if (!modelState) return ;
-
-    const isSprite = activeObject instanceof Model_Sprite && modelState instanceof SpriteState;
-
-    if (isSprite) {
-      if (inputManager.getKeyDown("Mouse0")) {
-        if (modelState.selectedVertexIndices.length < 2) {
-          console.log("二つ以上の頂点を選択");
-          return ;
-        }
-        const deleteEdges = modelState.selectedEdgeIndices;
-        const deleteEdgeCommand = commandManager.createCommand(RemoveItemsCommand);
-        deleteEdgeCommand.set(
-          activeObject,
-          "edges",
-          deleteEdges
-        );
-        const recorder = commandManager.createCommandRecorder();
-        recorder.appendCommand(deleteEdgeCommand);
-        commandManager.appendCommandRecorder(recorder);
-      }
+  public override update(editor: AnimaEditor, _view: UIComponent_View): void {
+    const model = editor.editorState.activeObject;
+    if (!editor.getManager(InputManager)?.getKeyDown("Mouse0") || !(model instanceof Model_Sprite)) return;
+    const state = editor.editorState.getModelStateByID(model.id);
+    if (!(state instanceof SpriteState)) return;
+    const edgeIDs = state.selectedEdgeIDs.filter(edgeID => Boolean(model.edges[edgeID]));
+    if (!edgeIDs.length) return;
+    const manager = editor.getManager(CommandManager);
+    if (!manager || manager.commandRecorder) return;
+    const recorder = manager.setCommandRecorder("Delete edges");
+    if (!recorder) return;
+    for (const edgeID of edgeIDs) {
+      recorder.setCommand(RemoveValueCommand, { model, path: "edges", removeKey: edgeID });
+      if (!recorder.command) { manager.cancelCommandRecorder(); return; }
+      recorder.commitCommand();
     }
-  }
-
-  public override drawOverlay(editor: AnimaEditor, view: UIComponent_View, renderPass: GPURenderPassEncoder): void {
-    const pipelineManager = editor.getManager(PipelineManager);
-    if (!pipelineManager) return ;
-    const translateOverlayPipeline = pipelineManager.getPipelineByID(
-      "Overlay-Tool_TranslateOverlay",
-    );
-    if (translateOverlayPipeline) {
-      renderPass.setBindGroup(
-        0,
-        simpleWebGPU.createGroup(translateOverlayPipeline.groupLayout, [
-          view.spaceData.cameraRenderData.cameraBuffer,
-        ]),
-      );
-      renderPass.setPipeline(translateOverlayPipeline.pipeline);
-      renderPass.draw(4, 1, 0);
-    } else {
-      console.warn("パイプライン: Overlay-Tool_TranslateOverlay がありません")
-    }
+    manager.commitCommandRecorder();
   }
 }

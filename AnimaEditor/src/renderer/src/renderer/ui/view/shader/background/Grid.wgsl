@@ -43,11 +43,10 @@ const lineWidth = 1.0;
 @fragment
 fn fmain(input: FInput) -> FOutput {
   var output: FOutput;
-  let gridRadius = gridSize / 2.0;
-  let lineThreshold = (gridSize - lineWidth) / 2.0;
-  let x = abs(abs(input.texCoord.x % gridSize) - gridRadius) > lineThreshold;
-  let y = abs(abs(input.texCoord.y % gridSize) - gridRadius) > lineThreshold;
-  let value = select(0.25, 0.4, x || y);
+  let coord = input.texCoord / gridSize;
+  let distance = abs(fract(coord + 0.5) - 0.5) / max(fwidth(coord), vec2<f32>(0.00001));
+  let coverage = 1.0 - clamp(min(distance.x, distance.y) / lineWidth, 0.0, 1.0);
+  let value = mix(0.25, 0.4, coverage);
   output.color = vec4<f32>(value, value, value, 1.0);
   return output;
 }

@@ -10,6 +10,7 @@ import { Model_Texture } from "../project/model/Texture";
 import { ID } from "../../editor/Editor";
 import { SceneConfigRuntime } from "./configRuntime/Scene";
 import { Project } from "../project/Project";
+import { Model } from "../project/Model";
 
 export type Runtimes = Runtime_Sprite | Runtime_Armature | Runtime_Animation | Runtime_Texture;
 export type TypeofRuntimes = typeof Runtime_Sprite | typeof Runtime_Armature | typeof Runtime_Animation | typeof Runtime_Texture;
@@ -50,7 +51,7 @@ export class ProjectCache {
 
   // T extends Runtimeこれは実際にclassを作っているわけじゃなくてTはRuntimeの子classである必要があるという条件
   // : new (...args: any[]) => Tこれはおまじないみたいなもの
-  public getRuntimesByType<T extends Runtime>(type: new (...args: any[]) => T): T[] {
+  public getRuntimesByType<T extends Runtime<Model>>(type: new (...args: any[]) => T): T[] {
     const result: T[] = [];
     for (const runtime of this.runtimes) {
       if (runtime instanceof type) {

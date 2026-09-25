@@ -1,6 +1,6 @@
 import { Models } from "../core/project/Project";
 import { AnimaEditor } from "../editor/Editor";
-import { SourceContext } from "./context/SourceContext";
+import { SourceContext } from "./context/contexts/SourceContext";
 import { Manager } from "./Manager";
 
 export enum EditorEventType {
@@ -34,7 +34,8 @@ export class EventManager extends Manager {
     this.events.push(event);
   }
 
-  update() {
-    this.events.length = 0;
+  // Preserve changes emitted between frames and events emitted during UI refresh.
+  takeEvents(): EditorEvent[] {
+    return this.events.splice(0);
   }
 }

@@ -1,34 +1,54 @@
 import { Runtime_Armature } from "../../../../core/projectCache/runtime/Armature";
-import { ArmatureState } from "../../../../editor/editorState/state/Armature";
+import { ArmatureState } from "../../../../editor/editorState/state/States/Armature";
 import { simpleWebGPU } from "../../../../util/simpleWebGPU";
 import { View_ModelRenderData } from "./ModelRenderData";
 
 export class View_ArmatureRenderData extends View_ModelRenderData {
-  public boneBuffer: GPUBuffer | null;
-  public boneVertexBuffer: GPUBuffer | null;
+  public selectedBoneCount = 0;
+  public selectedVertexCount = 0;
+  public boneBuffer: GPUBuffer = simpleWebGPU.createBuffer(32, ["V", "S"]);
+  public selectBoneBuffer: GPUBuffer = simpleWebGPU.createBuffer(32, ["V", "S"]);
+  public boneVertexBuffer: GPUBuffer = simpleWebGPU.createBuffer(32, ["V", "S"]);
   public vertexBuffer: GPUBuffer;
   public objectIDBuffer: GPUBuffer;
-  public selectBoneVertexBuffer: GPUBuffer | null;
+  public selectBoneVertexBuffer: GPUBuffer = simpleWebGPU.createBuffer(32, ["V", "S"]);
 
   constructor(numberID: number) {
     super(numberID);
-    this.boneBuffer = null;
-    this.boneVertexBuffer = null;
     this.vertexBuffer = simpleWebGPU.createBuffer(5 * 2 * 4, ["V"]);
-    this.selectBoneVertexBuffer = null;
     this.objectIDBuffer = simpleWebGPU.createBuffer(4, ["U"]);
   }
 
   public update(armature: Runtime_Armature, armatureState: ArmatureState): void {
+    const selectedBone = armature.bones.filter(bone => armatureState.selectedBoneIDs.includes(bone.id));
+    const selectedVertices = ["head", "tail"].flatMap(part => {
+      const ids = new Set(part === "head" ? armatureState.selectedHeadIDs : armatureState.selectedTailIDs);
+      for (const id of armatureState.selectedBoneIDs) ids.add(id);
+      return Object.entries(armature.model.bones).filter(([id]) => ids.has(id)).map(([, bone]) => part === "head" ? bone.head : bone.tail);
+    });
+    this.selectedBoneCount = selectedBone.length;
+    this.selectedVertexCount = selectedVertices.length;
     // TSのコンパイルのために判定を分ける
-    if (armature.bones.length === 0) return ;
-    if (armature.bones.length * (2 + 2 + 1 + 1) * 4 !== this.boneBuffer?.size) this.boneBuffer = simpleWebGPU.createBuffer(armature.bones.length * (2 + 2 + 1 + 1) * 4, ["V", "S"]);
-    if (armature.bones.length * (2 + 2) * 4 !== this.boneVertexBuffer?.size) this.boneVertexBuffer = simpleWebGPU.createBuffer(armature.bones.length * (2 + 2) * 4, ["V", "S"]);
-    if (armatureState.selectedVertexNum * 2 * 4 !== this.selectBoneVertexBuffer?.size) this.selectBoneVertexBuffer = simpleWebGPU.createBuffer(armatureState.selectedVertexNum * 2 * 4, ["S"]);
+    if (Math.max(32, armature.bones.length * (2 + 2 + 1 + 1) * 4) !== this.boneBuffer.size) {
+      this.boneBuffer.destroy();
+      this.boneBuffer = simpleWebGPU.createBuffer(Math.max(32, armature.bones.length * (2 + 2 + 1 + 1) * 4), ["V", "S"]);
+    }
+    if (Math.max(32, this.selectedBoneCount * (2 + 2 + 1 + 1) * 4) !== this.selectBoneVertexBuffer.size) {
+      this.selectBoneBuffer.destroy();
+      this.selectBoneBuffer = simpleWebGPU.createBuffer(Math.max(32, this.selectedBoneCount * (2 + 2 + 1 + 1) * 4), ["V", "S"]);
+    }
+    if (Math.max(32, armature.bones.length * (2 + 2) * 4) !== this.boneVertexBuffer.size) {
+      this.boneVertexBuffer.destroy();
+      this.boneVertexBuffer = simpleWebGPU.createBuffer(Math.max(32, armature.bones.length * (2 + 2) * 4), ["V", "S"]);
+    }
+    if (Math.max(32, this.selectedVertexCount * 2 * 4) !== this.selectBoneVertexBuffer.size) {
+      this.selectBoneVertexBuffer.destroy();
+      this.selectBoneVertexBuffer = simpleWebGPU.createBuffer(Math.max(32, this.selectedVertexCount * 2 * 4), ["S"]);
+    }
 
     simpleWebGPU.writeBuffer(
       this.selectBoneVertexBuffer,
-      new Float32Array(armatureState.selectedHead.map(bi => armature.model.bones[bi].head).concat(armatureState.selectedTail.map(bi => armature.model.bones[bi].tail)).flat())
+      new Float32Array(selectedVertices.flat())
     );
     simpleWebGPU.writeBuffer(
       this.objectIDBuffer,
@@ -37,7 +57,20 @@ export class View_ArmatureRenderData extends View_ModelRenderData {
     simpleWebGPU.writeBuffer(
       this.boneVertexBuffer,
       new Float32Array(
-        armature.model.bones.map((bone) => [...bone.head, ...bone.tail]).flat(),
+        armature.bones.map((bone) => [...bone.model.head, ...bone.model.tail]).flat(),
+      ),
+    );
+    simpleWebGPU.writeBuffer(
+      this.selectBoneBuffer,
+      new Float32Array(
+        selectedBone
+          .map((bone) => [
+            ...bone.pose.position,
+            ...bone.pose.scale,
+            bone.pose.rotation,
+            bone.base.length,
+          ])
+          .flat(),
       ),
     );
     simpleWebGPU.writeBuffer(

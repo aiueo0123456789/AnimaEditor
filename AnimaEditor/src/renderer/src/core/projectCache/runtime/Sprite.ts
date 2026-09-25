@@ -6,23 +6,12 @@ import { ReferenceResolver, Runtime } from "../Runtime";
 import { Runtime_Bone } from "./Armature";
 import { Runtime_Texture } from "./Texture";
 
-
-class WeightGroup {
-  public id: ID;
-  public weights: number[];
-  public target: string;
-  constructor() {
-    this.id = "";
-    this.weights = [];
-
-    this.target = "";
-  }
-}
-
 class BoneWeight {
+  public boneWeightID: ID;
   public bone: Runtime_Bone | null;
   public weights: number[];
-  constructor() {
+  constructor(boneWeightID: ID) {
+    this.boneWeightID = boneWeightID;
     this.bone = null;
     this.weights = [];
   }
@@ -30,7 +19,7 @@ class BoneWeight {
 
 type Runtime_Edge = [number, number];
 
-export class Runtime_Sprite extends Runtime {
+export class Runtime_Sprite extends Runtime<Model_Sprite>  {
   static createIndex(): Vec3 {
     return Vec3Math.create();
   }
@@ -43,8 +32,8 @@ export class Runtime_Sprite extends Runtime {
     return Vec2Math.create();
   }
 
-  static createBoneWeight(): BoneWeight {
-    return new BoneWeight();
+  static createBoneWeight(boneWeightID: ID): BoneWeight {
+    return new BoneWeight(boneWeightID);
   }
 
   static createEdge(): Runtime_Edge {
@@ -60,38 +49,25 @@ export class Runtime_Sprite extends Runtime {
     },
   };
 
-  public vertices: Vec2[];
-  public indices: Vec3[];
-  public silhouetteEdges: Runtime_Edge[];
-  public edges: Runtime_Edge[];
-  public texcoords: Vec2[];
-  public boneWeights: BoneWeight[];
-  public weightGroups: WeightGroup[];
-  public texture: Runtime_Texture | null;
-  public zIndex: number;
+  public vertices: Vec2[] = [];
+  public indices: Vec3[] = [];
+  public silhouetteEdges: Runtime_Edge[] = [];
+  public edges: Runtime_Edge[] = [];
+  public texcoords: Vec2[] = [];
+  public boneWeights: BoneWeight[] = [];
+  public texture: Runtime_Texture | null = null;
+  public zIndex: number = 0;
 
-  public vertexIDMap: Map<ID, number>;
-  public edgeIDMap: Map<ID, number>;
-  public silhouetteEdgeIDMap: Map<ID, number>;
+  public vertexIDMap: Map<ID, number> = new Map();
+  public edgeIDMap: Map<ID, number> = new Map();
+  public silhouetteEdgeIDMap: Map<ID, number> = new Map();
+  public boneWeightIDMap: Map<ID, number> = new Map();
 
   public override model: Model_Sprite;
 
   constructor(model: Model_Sprite) {
     super(model);
     this.model = model;
-    this.vertices = [];
-    this.indices = [];
-    this.silhouetteEdges = [];
-    this.edges = [];
-    this.texcoords = [];
-    this.boneWeights = [];
-    this.weightGroups = [];
-    this.texture = null;
-    this.zIndex = 0;
-
-    this.vertexIDMap = new Map();
-    this.edgeIDMap = new Map();
-    this.silhouetteEdgeIDMap = new Map();
   }
 
   get verticesNum() {

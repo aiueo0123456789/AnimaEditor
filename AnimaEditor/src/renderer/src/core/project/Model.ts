@@ -23,7 +23,7 @@ export class Model {
   public isModel: boolean;
   public name: string;
   public id: ID;
-  constructor(data: ModelInput, ) {
+  constructor(data: ModelInput) {
     this.isModel = true;
 
     this.modelName = data.modelName;

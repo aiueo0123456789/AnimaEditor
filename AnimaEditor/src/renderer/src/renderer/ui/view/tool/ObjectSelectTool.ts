@@ -1,60 +1,27 @@
 import { Tool } from "./Tool";
-import { AnimaEditor } from "../../../../editor/Editor";
-import { SetPropertyCommand } from "../../../../editor/command/SetProperty";
-import { CommandManager } from "../../../../manager/CommandManager";
+import type { AnimaEditor } from "../../../../editor/Editor";
 import { InputManager } from "../../../../manager/InputManager";
-import { UIComponent_View } from "../View";
+import type { UIComponent_View } from "../View";
 import { simpleWebGPU } from "../../../../util/simpleWebGPU";
-import { SetActiveObjectCommandBlock, SetActiveObjectCommandBlockInput } from "../../../../editor/commandBlock/SetActiveObject";
-
+import { editOnce } from "./editOnce";
 
 export class ObjectSelectTool extends Tool {
-  constructor() {
-    super();
-  }
-
-  public override activate(): void {
-  }
-
-  public override deactivate(): void {
-  }
-
+  private version = 0;
+  public override deactivate(): void { this.version++; }
   public override update(editor: AnimaEditor, view: UIComponent_View): void {
-    const inputManager = editor.getManager(InputManager);
-    const commandManager = editor.getManager(CommandManager);
-    if (!inputManager || !commandManager) return ;
-
-    const mouseScreenPosition = view.clientToScreen(inputManager.mousePosition);
-
-    if (inputManager.getKeyUp("Mouse0")) {
-      const fn = async (): Promise<void> => {
-        if (view.objectIDTexture) {
-          const objectID = await simpleWebGPU.pickTextureColor(view.objectIDTexture, mouseScreenPosition);
-          const clickObjectID = view.spaceData.numberIDtoID(objectID);
-          const newActiveObject = clickObjectID ? editor.project.getModelByID(clickObjectID) : null;
-
-          const recorder = commandManager.setCommandRecorder();
-          if (!recorder) return ;
-          recorder.setCommandBlock(SetActiveObjectCommandBlock, {model: newActiveObject} as SetActiveObjectCommandBlockInput);
-          commandManager.finishCommandRecorder();
-        }
-      };
-      fn();
-    }
-  }
-
-  public override drawOverlay(editorContext, uiContext, renderPass): void {
-    // const pipelineManager = editorContext.getAssetsManager(PipelineManager);
-    // const translateOverlayPipeline = pipelineManager.getPipelineByID(
-    //   "Overlay-Tool_RotationOverlay",
-    // );
-    // renderPass.setBindGroup(
-    //   0,
-    //   simpleWebGPU.createGroup(translateOverlayPipeline.groupLayout, [
-    //     uiContext.cameraBuffer,
-    //   ]),
-    // );
-    // renderPass.setPipeline(translateOverlayPipeline.pipeline);
-    // renderPass.draw(4, 1, 0);
+    const input = editor.getManager(InputManager);
+    if (!input?.getKeyUp("Mouse0") || !view.objectIDTexture) return;
+    const version = ++this.version;
+    const project = editor.project;
+    const texture = view.objectIDTexture;
+    const position = view.clientToScreen(input.mousePosition);
+    if (position.some(value => value < 0 || value >= 1)) return;
+    void simpleWebGPU.pickTextureColor(texture, position).then(objectID => {
+      if (version !== this.version || editor.project !== project || view.objectIDTexture !== texture) return;
+      const id = view.spaceData.renderData.numberIDtoID(objectID);
+      const model = id ? project.getModelByID(id) : null;
+      const selectedObjects = [...editor.editorState.selectedObjects];
+      if (model !== editor.editorState.activeObject) editOnce(editor, "Select object", () => [{ model: editor.editorState, path: "activeObject", value: model }, { model: editor.editorState, path: "selectedObjects", value: selectedObjects }]);
+    }).catch(error => { if (version === this.version && texture === view.objectIDTexture) console.error("Object picking failed", error); });
   }
 }

@@ -21,9 +21,10 @@ export class System_Skinning extends System {
     const targets = this.editor.projectCache.getRuntimesByType(Runtime_Sprite);
     for (const target of targets) {
       if (target.boneWeights.length) {
-        const sumWeights = target.vertices.map(vertex => 0);
+        const sumWeights = target.vertices.map(() => 0);
 
         target.boneWeights.forEach(boneWeight => {
+          if (!boneWeight.bone) return;
           boneWeight.weights.forEach((weight, vi) => {
             sumWeights[vi] += weight;
           })
@@ -48,7 +49,7 @@ export class System_Skinning extends System {
                   Mat3Math.transformPoint(baseVertices[i], boneBaseMatrix),
                   bonePoseMatrix,
                 ),
-                Vec2Math.create(boneWeight.weights[i], boneWeight.weights[i]),
+                Vec2Math.create(sumWeights[i] ? boneWeight.weights[i] / sumWeights[i] : 0, sumWeights[i] ? boneWeight.weights[i] / sumWeights[i] : 0),
               ),
               target.vertices[i],
             );

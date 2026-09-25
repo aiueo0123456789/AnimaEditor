@@ -12,6 +12,8 @@ export class InputManager extends Manager {
   public dragging: boolean;
 
   private lastClickTime: number;
+  private readonly pressed = new Set<string>();
+  private readonly released = new Set<string>();
 
   constructor(editor: AnimaEditor) {
     super(editor);
@@ -27,28 +29,36 @@ export class InputManager extends Manager {
   start() {
     window.addEventListener("mousedown", (e) => {
       this.lastClickTime = Date.now();
-      this.setKey("Mouse0", true);
+      this.setKey(`Mouse${e.button}`, true);
       Vec2Math.set(e.clientX, e.clientY, this.mousePosition);
     });
     window.addEventListener("mouseup", (e) => {
-      this.setKey("Mouse0", false);
+      this.setKey(`Mouse${e.button}`, false);
       Vec2Math.set(e.clientX, e.clientY, this.mousePosition);
     });
     window.addEventListener("mousemove", (e) => {
       Vec2Math.set(e.clientX, e.clientY, this.mousePosition);
-      Vec2Math.set(e.movementX, e.movementY, this.mouseMovement);
+      this.mouseMovement[0] += e.movementX;
+      this.mouseMovement[1] += e.movementY;
     });
     window.addEventListener("keydown", (e) => {
-      console.log("押された", e.code);
-      if (e.key === "Tab") e.preventDefault();
-      this.setKeyDown(e.code);
+      if ((e.target as HTMLElement)?.closest("input, textarea, [contenteditable='true']")) return;
+      this.setKey(e.code, true);
     });
     window.addEventListener("keyup", (e) => {
-      console.log("はなした", e.code);
       this.setKey(e.code, false);
     });
     window.addEventListener("wheel", (e) => {
       Vec2Math.set(-e.deltaX, e.deltaY, this.mouseScrollDelta);
+    });
+    window.addEventListener("blur", () => {
+      this.current = {};
+      this.previous = {};
+      this.pressed.clear();
+      this.released.clear();
+      this.dragging = false;
+      Vec2Math.clear(this.mouseMovement);
+      Vec2Math.clear(this.mouseScrollDelta);
     });
     this.update();
   }
@@ -66,6 +76,8 @@ export class InputManager extends Manager {
   }
 
   updateLate() {
+    this.pressed.clear();
+    this.released.clear();
     // 前フレーム保存
     this.previous = {};
     for (const key in this.current) {
@@ -78,13 +90,9 @@ export class InputManager extends Manager {
   }
 
   private setKey(key: string, value: boolean) {
+    if (value && !this.current[key]) this.pressed.add(key);
+    if (!value && this.current[key]) this.released.add(key);
     this.current[key] = value;
-  }
-
-  // 強制的入力判定にする
-  private setKeyDown(key: string) {
-    this.current[key] = true;
-    this.previous[key] = false;
   }
 
   getKey(key: string) {
@@ -92,10 +100,10 @@ export class InputManager extends Manager {
   }
 
   getKeyDown(key: string) {
-    return this.current[key] && !this.previous[key];
+    return this.pressed.has(key) || (this.current[key] && !this.previous[key]);
   }
 
   getKeyUp(key: string) {
-    return !this.current[key] && this.previous[key];
+    return this.released.has(key) || (!this.current[key] && this.previous[key]);
   }
 }

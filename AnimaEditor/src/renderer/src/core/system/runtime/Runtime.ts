@@ -28,7 +28,11 @@ export class System_Runtime extends System {
         const key = path[pathI];
         if (key === ReferenceResolver.PATH.ARRAY && Array.isArray(targetRuntime)) {
           for (let i = 0; i < targetRuntime.length; i++) {
-            resolver(path.slice(pathI + 1), referenceResolver, targetRuntime[i], targetModel[i]);
+            const runtimeItem = targetRuntime[i];
+            const modelItem = Array.isArray(targetModel)
+              ? targetModel[i]
+              : targetModel?.[runtimeItem?.boneID ?? runtimeItem?.boneWeightID];
+            if (modelItem) resolver(path.slice(pathI + 1), referenceResolver, runtimeItem, modelItem);
           }
           return;
         }
@@ -37,9 +41,9 @@ export class System_Runtime extends System {
           const current = targetRuntime[key];
           if (searchID instanceof ModelReference && searchID.modelID !== current?.id) {
             targetRuntime[key] = editor.projectCache.getRuntimesByID(searchID.modelID);
-          } else if (searchID instanceof BoneReference && searchID.boneID !== current?.id) {
+          } else if (searchID instanceof BoneReference) {
             const armature = editor.projectCache.getRuntimesByID(searchID.aramatureID);
-            if (armature instanceof Runtime_Armature) targetRuntime[key] = armature.getBoneByID(searchID.boneID);
+            targetRuntime[key] = armature instanceof Runtime_Armature ? armature.getBoneByID(searchID.boneID) : null;
           }
         } else {
           targetRuntime = targetRuntime[key];
@@ -58,7 +62,7 @@ export class System_Runtime extends System {
       }
     };
 
-    loop(runtime.constructor.referenceResolver);
+    if ("referenceResolver" in runtime.constructor) loop(runtime.constructor.referenceResolver as any);
   }
 
   public override update(): void {

@@ -1,19 +1,11 @@
 import { Runtime_Armature } from "../../../core/projectCache/runtime/Armature";
 import { Runtime_Sprite } from "../../../core/projectCache/runtime/Sprite";
 import { AnimaEditor } from "../../../editor/Editor";
-import { JTag } from "../../../library/JTag/JTag";
-import { JTag_Base } from "../../../library/JTag/tag/Base";
-import { JTag_Button } from "../../../library/JTag/tag/Button";
-import { JTag_Canvas } from "../../../library/JTag/tag/Canvas";
-import { JTag_Container } from "../../../library/JTag/tag/Container";
-import { JTag_CustomTag } from "../../../library/JTag/tag/CustomTag";
-import { JTag_Stack } from "../../../library/JTag/tag/Stack";
 import { InputManager } from "../../../manager/InputManager";
 import { PipelineManager } from "../../../manager/PipelineManager";
-import { resizeObserver } from "../../../util/resizeObserver";
 import { simpleWebGPU } from "../../../util/simpleWebGPU";
 import { Vec2, Vec2Math } from "../../../util/vecMath";
-import { setStopPropagation, ToolRender, ToolManager, UIComponent } from "../UI";
+import { ToolRender, ToolManager, UIComponent } from "../UI";
 import { View_Camera } from "./Camera";
 import { UIComponent_View_SpaceData } from "./SpaceData";
 import { CommandManager } from "../../../manager/CommandManager";
@@ -22,9 +14,8 @@ import { ObjectSelectTool } from "./tool/ObjectSelectTool";
 import { AddVertexTool } from "./tool/AddVertexTool";
 import { RotationTool } from "./tool/RotationTool";
 import { TranslateTool } from "./tool/TranslateTool";
-import { SetPropertyCommand, SetPropertyCommandInput } from "../../../editor/command/SetProperty";
-import { SpriteState } from "../../../editor/editorState/state/Sprite";
-import { ArmatureState } from "../../../editor/editorState/state/Armature";
+import { SpriteState } from "../../../editor/editorState/state/States/Sprite";
+import { ArmatureState } from "../../../editor/editorState/state/States/Armature";
 import { View_ArmatureRenderData } from "./renderData/ArmatureRenderData";
 import { View_SpriteRenderData } from "./renderData/SpriteRenderData";
 import { AddArmatureTool } from "./tool/AddArmatureTool";
@@ -32,56 +23,129 @@ import { AddBoneTool } from "./tool/AddBoneTool";
 import { AddEdgeTool } from "./tool/AddEdgeTool";
 import { DeleteEdgeTool } from "./tool/DeleteEdgeTool";
 import { DeleteVertexTool } from "./tool/DeleteVertexTool";
-import { JTag_ToolBar } from "../../../library/JTag/tag/ToolBar";
+import { UIManager } from "../../../manager/ui/UIManager";
+import type { WidgetHandle } from "../../../manager/ui/WidgetTree";
+import { bind, Button, Canvas, Column, Container, Header, Main, Row, Text, Select } from "../../../manager/ui/components";
+import type { Widget } from "../../../manager/ui/components";
 import { WeightPaintTool } from "./tool/WeightPaintTool";
+
+import { ScaleTool } from "./tool/ScaleTool";
+import { DeleteBoneTool } from "./tool/DeleteBoneTool";
+import { CameraRenderData } from "./renderData/CameraRenderData";
+import { EditorEvent, EditorEventType } from "../../../manager/EventManager";
+import { ViewEditModes } from "./ViewEditModes";
+
+export class View_RenderData {
+  public cameraRenderData = new CameraRenderData();
+
+  dispose() {
+    this.cameraRenderData.cameraBuffer.destroy();
+  }
+}
 
 let counter = 0;
 export class UIComponent_View extends UIComponent {
-  public spaceData: UIComponent_View_SpaceData;
-  public camera: View_Camera;
-  public canvas: JTag_Canvas | null;
-  public canvasBBox: DOMRect | null;
-  public canvasContext: any;
-  public tools: ToolRender[];
-  public currentTool: string;
-  public toolManager: ToolManager;
-  public objectIDTexture: GPUTexture | null;
-  public objectIDTextureView: GPUTextureView | null;
+  private handle: WidgetHandle | null = null;
+  private host: HTMLElement | null = null;
+  private gesture = false;
+  private hovering = false;
+  private activeToolID = "";
+  private toolbarHandle: WidgetHandle | null = null;
+  private toolbarSignature = "";
+  private lastMode: ViewEditModes | null = null;
 
-  constructor() {
+  private get availableTools(): ToolRender[] {
+    const allowed = this.spaceData.modeToToolMap[this.spaceData.editMode] ?? [];
+    return this.tools.filter(tool => allowed.includes(tool.callTool));
+  }
+
+  private syncTool(): void {
+    const tools = this.availableTools;
+    if (!tools.some(tool => tool.id === this.currentTool)) this.currentTool = tools[0]?.id ?? "";
+    if (this.lastMode === this.spaceData.editMode && this.activeToolID === this.currentTool) return;
+    this.toolManager.activeTool?.deactivate();
+    this.toolManager.activeTool = null;
+    this.gesture = false;
+    this.lastMode = this.spaceData.editMode;
+    const tool = tools.find(item => item.id === this.currentTool);
+    if (tool) this.toolManager.activate(tool.callTool);
+    this.activeToolID = this.currentTool;
+  }
+
+  private buildToolbar(ui: UIManager): Widget {
+    const labels: Record<string, string> = { objectSelect: "オブジェクト選択", select: "頂点選択", translate: "移動",
+      rotation: "回転", scale: "拡大縮小", addVertex: "頂点追加", DeleteVertex: "頂点削除", AddEdge: "辺追加",
+      DeleteEdge: "辺削除", AddBone: "ボーン追加", DeleteBone: "ボーン削除", AddArmature: "アーマチュア追加", WeightPaint: "ウェイトペイント" };
+    return Column({ gap: 3, children: this.availableTools.map(tool => Button({
+          label: labels[tool.id] ?? tool.id, tooltip: labels[tool.id] ?? tool.id, icon: tool.icon, iconOnly: true,
+          pressed: bind({ read: () => this.currentTool === tool.id }),
+          onPress: () => {
+            if (!this.availableTools.includes(tool)) return;
+            this.currentTool = tool.id;
+            this.syncTool();
+            if (this.toolbarHandle) ui.invalidateWidget(this.toolbarHandle);
+          },
+    })) });
+  }
+
+  private _renderData: View_RenderData | null = new View_RenderData();
+  get renderData(): View_RenderData {
+    if (!(this._renderData instanceof View_RenderData)) this._renderData = new View_RenderData();
+    return this._renderData;
+  }
+
+  public override dispose(editor: AnimaEditor): void {
+    this.toolManager.activeTool?.deactivate();
+    this.toolManager.activeTool = null;
+    this.activeToolID = "";
+    if (this.handle) editor.getManager(UIManager)?.disposeWidget(this.handle);
+    this.handle = null;
+    this.host = null;
+    this._renderData?.dispose();
+    this._renderData = null;
+    for (const buffer of this.uniforms.values()) buffer.destroy();
+    this.uniforms.clear();
+  }
+  private readonly uniforms = new Map<string, GPUBuffer>();
+  private uniform(values: number[]): GPUBuffer {
+    const key = values.join(",");
+    let buffer = this.uniforms.get(key);
+    if (!buffer) {
+      buffer = simpleWebGPU.createBuffer(values.length * 4, ["U"], new Float32Array(values));
+      this.uniforms.set(key, buffer);
+    }
+    return buffer;
+  }
+  public camera: View_Camera = new View_Camera();
+  public canvas: HTMLCanvasElement | null = null;
+  public canvasBBox: DOMRect | null = null;
+  public canvasContext: any = null;
+  public tools: ToolRender[];
+  public get currentTool(): string { return this.spaceData.currentTool; }
+  public set currentTool(value: string) { this.spaceData.currentTool = value; }
+  public toolManager: ToolManager = new ToolManager();
+  public objectIDTexture: GPUTexture | null = null;
+  public objectIDTextureView: GPUTextureView | null = null;
+
+  constructor(public readonly spaceData = new UIComponent_View_SpaceData()) {
     super({ name: "View", id: counter, icon: "eye" });
     counter++;
-
-    this.spaceData = new UIComponent_View_SpaceData();
-
-    this.camera = new View_Camera();
-
-    this.canvas = null;
-    this.canvasBBox = null;
-    this.canvasContext = null;
 
     this.tools = [
       new ToolRender("objectSelect", "select", ObjectSelectTool),
       new ToolRender("select", "select", SelectTool),
       new ToolRender("translate", "translate", TranslateTool),
       new ToolRender("rotation", "rotation", RotationTool),
-      // new ToolRender("scale", "scale", ScaleTool),
+      new ToolRender("scale", "scale", ScaleTool),
       new ToolRender("addVertex", "addPoint", AddVertexTool),
       new ToolRender("DeleteVertex", "removePoint", DeleteVertexTool),
       new ToolRender("AddEdge", "addEdge", AddEdgeTool),
       new ToolRender("DeleteEdge", "removeEdge", DeleteEdgeTool),
       new ToolRender("AddBone", "addBone", AddBoneTool),
-      new ToolRender("DeleteBone", "removeBone", AddBoneTool),
+      new ToolRender("DeleteBone", "removeBone", DeleteBoneTool),
       new ToolRender("AddArmature", "addPoint", AddArmatureTool),
-      new ToolRender("WeightPaint", "weightPaint", WeightPaintTool),
+      new ToolRender("WeightPaint", "addPoint", WeightPaintTool),
     ];
-
-    this.currentTool = this.tools[0].id;
-
-    this.toolManager = new ToolManager();
-
-    this.objectIDTexture = null;
-    this.objectIDTextureView = null;
   }
 
   public clientVecToWorldVec(vec: Vec2): Vec2 {
@@ -119,153 +183,143 @@ export class UIComponent_View extends UIComponent {
     return this.screenToWorld(this.clientToScreen(clientPosition));
   }
 
-  public override input(input: InputManager, editor: AnimaEditor): void {
-    if (this.toolManager.activeTool) this.toolManager.activeTool.update(editor, this);
-    const commandManager = editor.getManager(CommandManager);
-    if (!commandManager) return ;
-    if (input.getKey("ShiftLeft")) {
-      if (input.getKey("MetaLeft") && input.getKeyDown("KeyZ")) {
-        commandManager.redo();
-      }
-    } else {
-      if (input.getKey("MetaLeft") && input.getKeyDown("KeyZ")) {
-        commandManager.undo();
-      }
+  public override input(editor: AnimaEditor): void { this.processInput(editor); }
+
+  private processInput(editor: AnimaEditor): void {
+    this.syncTool();
+    const input = editor.getManager(InputManager);
+    if (!input || !this.canvas) return;
+    this.canvasBBox = this.canvas.getBoundingClientRect();
+    if (this.gesture) {
+      this.toolManager.activeTool?.update(editor, this);
+      if (input.getKeyUp("Mouse0") || !input.getKey("Mouse0")) this.gesture = false;
     }
-    if (input.getKey("ControlLeft")) {
-      this.camera.zoom += input.mouseScrollDelta[1] * 0.01;
-      this.camera.zoom = Math.max(0.05, this.camera.zoom);
+    if (!this.hovering || document.activeElement !== this.canvas) return;
+    if (this.gesture) return;
+    if (input.getKey("ControlLeft") || input.getKey("ControlRight")) {
+      this.camera.zoom = Math.max(.05, Math.min(100, this.camera.zoom * Math.exp(-input.mouseScrollDelta[1] * .01)));
     } else {
-      Vec2Math.sub(
-        this.camera.position,
-        Vec2Math.mul(this.clientVecToWorldVec(input.mouseScrollDelta), Vec2Math.create(1, -1)),
-        this.camera.position,
-      );
+      Vec2Math.sub(this.camera.position, Vec2Math.mul(this.clientVecToWorldVec(input.mouseScrollDelta), [1, -1]), this.camera.position);
     }
-    // if (input.getKeyDown("Tab")) {
-    //   /** @type {SetPropertyCommand} */
-    //   const command =
-    //     editorContext.CommandManager.createCommand(SetPropertyCommand);
-    //   // if (editorContext.editorState.editMode == EditModes.Object) {
-    //   //   if (editorContext.editorState.activeObject instanceof Model_Sprite) {
-    //   //     command.set(editorContext.editorState, "editMode", EditModes.Vertex);
-    //   //   }
-    //   // } else {
-    //   //   command.set(editorContext.editorState, "editMode", EditModes.Object);
-    //   // }
-    //   editorContext.commandManager.appendCommand(command);
-    //   editorContext.commandManager.execute();
-    // }
+  }
+
+  private mountCanvas(editor: AnimaEditor, canvas: HTMLCanvasElement): () => void {
+    this.canvas = canvas;
+    const controller = new AbortController();
+    const signal = controller.signal;
+    this.canvasContext = canvas.getContext("webgpu");
+    this.canvasContext?.configure({ device: simpleWebGPU.device, format: simpleWebGPU.preferredCanvasFormat });
+    const resize = new ResizeObserver(() => {
+      const rect = canvas.getBoundingClientRect();
+      const scale = window.devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.round(rect.width * scale));
+      canvas.height = Math.max(1, Math.round(rect.height * scale));
+      this.canvasBBox = rect;
+      this.updateObjectIDTexture();
+    });
+    resize.observe(canvas);
+    canvas.addEventListener("pointerdown", event => {
+      if (event.button !== 0) return;
+      canvas.focus({ preventScroll: true });
+      this.gesture = true;
+      canvas.setPointerCapture(event.pointerId);
+    }, { signal });
+    canvas.addEventListener("pointerenter", () => { this.hovering = true; }, { signal });
+    canvas.addEventListener("pointerleave", () => { this.hovering = false; }, { signal });
+    const cancel = (): void => { this.gesture = false; this.toolManager.activeTool?.deactivate(); };
+    canvas.addEventListener("pointercancel", cancel, { signal });
+    window.addEventListener("blur", cancel, { signal });
+    canvas.addEventListener("contextmenu", event => event.preventDefault(), { signal });
+    canvas.addEventListener("wheel", event => { canvas.focus({ preventScroll: true }); event.preventDefault(); }, { signal, passive: false });
+    canvas.addEventListener("keydown", event => {
+      if (event.code === "KeyZ" && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        if (this.gesture && !editor.getManager(InputManager)?.getKey("Mouse0")) this.processInput(editor);
+        cancel();
+        const manager = editor.getManager(CommandManager);
+        if (event.shiftKey) manager?.redo(); else manager?.undo();
+      }
+      if (event.code === "Escape") cancel();
+    }, { signal });
+    return () => {
+      cancel();
+      controller.abort();
+      resize.disconnect();
+      this.canvasContext?.unconfigure();
+      this.canvasContext = null;
+      this.objectIDTexture?.destroy();
+      this.objectIDTexture = null;
+      this.objectIDTextureView = null;
+      this.canvas = null;
+      this.canvasBBox = null;
+      this.hovering = false;
+    };
   }
 
   private updateObjectIDTexture(): void {
     if (this.canvas) {
+      this.objectIDTexture?.destroy();
       this.objectIDTexture = simpleWebGPU.createTexture2D(
-        [this.canvas.body.offsetWidth, this.canvas.body.offsetHeight],
+        [Math.max(1, this.canvas.clientWidth), Math.max(1, this.canvas.clientHeight)],
         "r32uint",
       );
       this.objectIDTextureView = this.objectIDTexture.createView();
     }
   }
 
-  public override update(editor: AnimaEditor, parent: JTag_CustomTag): void {
+  public override update(editor: AnimaEditor, parent: HTMLElement): void {
     const pipelineManager = editor.getManager(PipelineManager);
     if (!pipelineManager) return ;
-    const commandManager = editor.getManager(CommandManager);
-    if (!commandManager) return ;
-
-    const libraryJTag = editor.library.JTag;
-    if (!parent.children.length || parent.children[0].id !== `View`) {
-      libraryJTag.clear(parent);
-      const container = JTag.createTag(JTag_Container);
-      container.body.classList.add("group-container");
-      container.id = `View`;
-      libraryJTag.append(parent, container);
-
-      const header = JTag.createTag(JTag_Base);
-      header.body.classList.add("header");
-
-      const iconTag = JTag.createTag(JTag_Button);
-      iconTag.setIcon(JTag.getSvg(this.icon));
-      iconTag.setText(this.name);
-      libraryJTag.append(header, iconTag);
-
-      const body = JTag.createTag(JTag_Stack);
-      body.body.classList.add("main");
-
-      libraryJTag.append(container, header);
-      libraryJTag.append(container, body);
-
-      this.canvas = JTag.createTag(JTag_Canvas);
-
-      const toolBar = JTag.createTag(JTag_ToolBar);
-      // section.setTitle("セクション");
-      const toolBarMap: Map<string, JTag_Button> = new Map();
-      for (const tool of this.tools) {
-        const tag_tool = JTag.createTag(JTag_Button);
-        tag_tool.setIcon(JTag.getSvg(tool.icon));
-        libraryJTag.append(toolBar, tag_tool);
-        toolBarMap.set(tool.id, tag_tool);
-
-        setStopPropagation(tag_tool.body, "mouseup");
-        setStopPropagation(tag_tool.body, "click");
-
-        tag_tool.body.addEventListener("mousedown", (e) => {
-          e.stopPropagation();
-          const recorder = commandManager.setCommandRecorder();
-          recorder?.setCommand(SetPropertyCommand, {model: this, path: "currentTool", newValue: tool.id} as SetPropertyCommandInput);
-          recorder?.finishCommand();
-          commandManager.finishCommandRecorder();
-        });
-      }
-      editor.observer.add(
-        { object: this, property: "currentTool" },
-        (current: string, last: string, isInit: boolean) => {
-          if (last) {
-            const tag_tool = toolBarMap.get(last);
-            if (tag_tool) tag_tool.body.classList.remove("active");
-          }
-          if (current) {
-            const tag_tool = toolBarMap.get(current);
-            if (tag_tool) tag_tool.body.classList.add("active");
-          }
-          for (const tool of this.tools) {
-            if (tool.id === current) {
-              if (tool.callTool) {
-                this.toolManager.activate(tool.callTool);
-                break;
-              }
-            }
-          }
-        },
-        true,
-      );
-      libraryJTag.append(body, this.canvas);
-      libraryJTag.append(body, toolBar);
-
-      this.canvasContext = this.canvas.body.getContext("webgpu");
-      this.canvasContext.configure({
-        device: simpleWebGPU.device,
-        format: simpleWebGPU.preferredCanvasFormat,
+    const ui = editor.getManager(UIManager);
+    if (!ui) return;
+    if (this.host !== parent || !this.handle) {
+      this.dispose(editor);
+      const modeChange = (): Widget => Select({
+        label: "編集モード",
+        observeEvents: [
+          new EditorEvent(EditorEventType.change, editor.editorState, "activeObject"),
+        ],
+        value: bind({ read: () => this.spaceData.editMode }),
+        options: editor.editorState.getModelStateByID(editor.editorState.activeObject?.id ?? "")?.availableModes.map(mode => ({ value: mode, label: mode })) ?? [{value: ViewEditModes.OBJECT, label: ViewEditModes.OBJECT}],
+        onChange: value => { if (value && Object.values(ViewEditModes).includes(value as ViewEditModes)) {
+          this.spaceData.editMode = value as ViewEditModes;
+          this.syncTool();
+        }}
       });
-      resizeObserver.add(this.canvas.body, (canvas: HTMLCanvasElement): void => {
-        canvas.width = canvas.offsetWidth * 2;
-        canvas.height = canvas.offsetHeight * 2;
-
-        this.canvasBBox = canvas.getBoundingClientRect();
-
-        this.updateObjectIDTexture();
-      });
-
-      this.updateObjectIDTexture();
+      this.handle = ui.mountWidget(parent, Column({ className: "ui-panel ui-view", children: [
+        Header({ gap: 8, children: [
+          Text({ text: this.name }),
+          modeChange
+        ] }),
+        Main({ className: "ui-view-main", padding: 0, overflow: "hidden", children: [
+          Canvas({ className: "ui-view-canvas", label: "Animation viewport", onMount: canvas => this.mountCanvas(editor, canvas) }),
+          Container({ className: "ui-view-toolbar", onMount: element => {
+            const handle = ui.mountWidget(element, this.buildToolbar(ui));
+            this.toolbarHandle = handle;
+            this.toolbarSignature = "";
+            return () => { ui.disposeWidget(handle); this.toolbarHandle = null; };
+          } }),
+        ] }),
+      ] }));
+      this.host = parent;
     }
+    this.syncTool();
+    const signature = JSON.stringify([this.spaceData.editMode, this.availableTools.map(tool => tool.id)]);
+    const modeChanged = signature !== this.toolbarSignature;
+    if (this.toolbarHandle) {
+      if (signature !== this.toolbarSignature) ui.resetWidget(this.toolbarHandle, this.buildToolbar(ui));
+      this.toolbarSignature = signature;
+      ui.invalidateWidget(this.toolbarHandle);
+    }
+    if (modeChanged && this.handle) ui.invalidateWidget(this.handle);
 
     const sprites: Runtime_Sprite[] = editor.projectCache.getRuntimesByType(Runtime_Sprite);
     const armatures: Runtime_Armature[] = editor.projectCache.getRuntimesByType(Runtime_Armature);
 
-    if (this.canvas && this.canvasBBox && this.canvasContext) {
+    this.spaceData.renderData.retain(new Set([...sprites, ...armatures].map(runtime => runtime.id))); // 表示しないrenderDataの削除
+    if (this.canvas && this.canvasBBox && this.canvasContext && this.canvasBBox.width > 0 && this.canvasBBox.height > 0) {
       // textureとかのサイズ変更があるか
-      this.spaceData.cameraRenderData.update(
+      this.renderData.cameraRenderData.update(
         this.camera,
         this.canvasBBox.width,
         this.canvasBBox.height,
@@ -273,18 +327,18 @@ export class UIComponent_View extends UIComponent {
       for (const sprite of sprites) {
         const state = editor.editorState.getModelStateByID(sprite.id);
         if (!(state instanceof SpriteState)) continue ;
-        let renderData = this.spaceData.getRenderData(sprite.id);
+        let renderData = this.spaceData.renderData.getRenderData(sprite.id);
         if (!renderData) {
-          renderData = this.spaceData.addSpriteRenderData(sprite);
+          renderData = this.spaceData.renderData.addSpriteRenderData(sprite);
         }
         if (renderData instanceof View_SpriteRenderData) renderData.update(sprite, state);
       }
       for (const armature of armatures) {
         const state = editor.editorState.getModelStateByID(armature.id);
         if (!(state instanceof ArmatureState)) continue ;
-        let renderData = this.spaceData.getRenderData(armature.id);
+        let renderData = this.spaceData.renderData.getRenderData(armature.id);
         if (!renderData) {
-          renderData = this.spaceData.addArmatureRenderData(armature);
+          renderData = this.spaceData.renderData.addArmatureRenderData(armature);
         }
         if (renderData instanceof View_ArmatureRenderData) renderData.update(armature, state);
       }
@@ -311,7 +365,7 @@ export class UIComponent_View extends UIComponent {
           mainRenderPass.setBindGroup(
             0,
             simpleWebGPU.createGroup(bg_gridPipeline.groupLayout, [
-              this.spaceData.cameraRenderData.cameraBuffer,
+              this.renderData.cameraRenderData.cameraBuffer,
             ]),
           );
           mainRenderPass.setPipeline(bg_gridPipeline.pipeline);
@@ -322,7 +376,7 @@ export class UIComponent_View extends UIComponent {
 
         // シーンスプライト
         for (const sprite of sprites.sort((a, b) => a.zIndex - b.zIndex)) {
-          const renderData = this.spaceData.getRenderData(sprite.id);
+          const renderData = this.spaceData.renderData.getRenderData(sprite.id);
           if (renderData instanceof View_SpriteRenderData) {
             if (!(sprite.texture?.texture && renderData.vertexBuffer && renderData.indexBuffer && renderData.edgeBuffer)) continue ;
 
@@ -345,7 +399,7 @@ export class UIComponent_View extends UIComponent {
               const bindGroup = simpleWebGPU.createGroup(
                 spritePipeline.groupLayout,
                 [
-                  this.spaceData.cameraRenderData.cameraBuffer,
+                  this.renderData.cameraRenderData.cameraBuffer,
                   sprite.texture.texture,
                   simpleWebGPU.sampler,
                 ],
@@ -365,117 +419,113 @@ export class UIComponent_View extends UIComponent {
         // オーバーレイスプライト
         for (const sprite of sprites) {
           if (editor.editorState.activeObject === sprite.model) {
-            const spriteState = editor.editorState.getModelStateByID(sprite.id,);
-            if (!(spriteState instanceof SpriteState)) continue ;
-
-            const renderData = this.spaceData.getRenderData(sprite.id);
+            const renderData = this.spaceData.renderData.getRenderData(sprite.id);
             if (!(renderData instanceof View_SpriteRenderData)) continue ;
-            if (!(renderData.vertexBuffer && renderData.indexBuffer && renderData.edgeBuffer && renderData.selectVertexBuffer && renderData.silhouetteEdgeBuffer)) continue ;
+            if (!(renderData.vertexBuffer && renderData.indexBuffer && renderData.edgeBuffer && renderData.selectVertexBuffer && renderData.silhouetteEdgeBuffer && renderData.weightBuffer)) continue ;
 
-            const spriteIndicesPipeline = pipelineManager.getPipelineByID("Overlay-SpriteIndices");
-            if (spriteIndicesPipeline) {
-              const bindGroup = simpleWebGPU.createGroup(
-                spriteIndicesPipeline.groupLayout,
-                [
-                  this.spaceData.cameraRenderData.cameraBuffer,
-                  renderData.vertexBuffer,
-                  renderData.indexBuffer,
-                  simpleWebGPU.createBuffer(
-                    4 * 4,
-                    ["U"],
-                    new Float32Array([0.1, 0.1, 0.1, 1]),
-                  ),
-                ],
-              );
-              mainRenderPass.setBindGroup(0, bindGroup);
-              mainRenderPass.setPipeline(spriteIndicesPipeline.pipeline);
-              mainRenderPass.draw(4 * 3, sprite.indicesNum);
-            } else {
-              console.warn("スプライトオーバレイ表示ようのパイプライン1がありません");
-            }
-
-            const spriteEdgetPipeline = pipelineManager.getPipelineByID("Overlay-SpriteEdge");
-            if (spriteEdgetPipeline) {
-              mainRenderPass.setPipeline(spriteEdgetPipeline.pipeline);
-              if (sprite.edgesNum) {
-                const edgeBindGroup = simpleWebGPU.createGroup(
-                  spriteEdgetPipeline.groupLayout,
+            if (this.toolManager.activeTool instanceof WeightPaintTool) {
+              const spriteIndicesPipeline = pipelineManager.getPipelineByID("Overlay-SpriteWeight");
+              if (spriteIndicesPipeline) {
+                const bindGroup = simpleWebGPU.createGroup(
+                  spriteIndicesPipeline.groupLayout,
                   [
-                    this.spaceData.cameraRenderData.cameraBuffer,
+                    this.renderData.cameraRenderData.cameraBuffer,
                     renderData.vertexBuffer,
-                    renderData.edgeBuffer,
-                    simpleWebGPU.createBuffer(
-                      4 * 4,
-                      ["U"],
-                      new Float32Array([0.1, 0.7, 1.0, 1]),
-                    ),
+                    renderData.weightBuffer,
                   ],
                 );
-                mainRenderPass.setBindGroup(0, edgeBindGroup);
-                mainRenderPass.draw(4, sprite.edgesNum);
+                mainRenderPass.setBindGroup(0, bindGroup);
+                mainRenderPass.setPipeline(spriteIndicesPipeline.pipeline);
+                mainRenderPass.draw(4, sprite.verticesNum);
+              } else {
+                console.warn("ウェイト表示ようのパイプラインがありません");
               }
-
-              if (sprite.silhouetteEdgesNum) {
-                const silhouetteEdgeBindGroup = simpleWebGPU.createGroup(
-                  spriteEdgetPipeline.groupLayout,
+            } else {
+              const spriteIndicesPipeline = pipelineManager.getPipelineByID("Overlay-SpriteIndices");
+              if (spriteIndicesPipeline) {
+                const bindGroup = simpleWebGPU.createGroup(
+                  spriteIndicesPipeline.groupLayout,
                   [
-                    this.spaceData.cameraRenderData.cameraBuffer,
+                    this.renderData.cameraRenderData.cameraBuffer,
                     renderData.vertexBuffer,
-                    renderData.silhouetteEdgeBuffer,
-                    simpleWebGPU.createBuffer(
-                      4 * 4,
-                      ["U"],
-                      new Float32Array([0.1, 0.7, 0.2, 1]),
-                    ),
+                    renderData.indexBuffer,
+                    this.uniform([0.1, 0.1, 0.1, 1]),
                   ],
                 );
-                mainRenderPass.setBindGroup(0, silhouetteEdgeBindGroup);
-                mainRenderPass.draw(4, sprite.silhouetteEdgesNum);
+                mainRenderPass.setBindGroup(0, bindGroup);
+                mainRenderPass.setPipeline(spriteIndicesPipeline.pipeline);
+                mainRenderPass.draw(4 * 3, sprite.indicesNum);
+              } else {
+                console.warn("スプライトオーバレイ表示ようのパイプライン1がありません");
               }
-            } else {
-              console.warn("スプライトオーバレイ表示ようのパイプライン2がありません");
-            }
 
-            const spriteVertextPipeline = pipelineManager.getPipelineByID("Overlay-SpriteVertex");
-            if (spriteVertextPipeline) {
-              const bindGroup = simpleWebGPU.createGroup(
-                spriteVertextPipeline.groupLayout,
-                [
-                  this.spaceData.cameraRenderData.cameraBuffer,
-                  renderData.vertexBuffer,
-                  simpleWebGPU.createBuffer(
-                    4 * 4,
-                    ["U"],
-                    new Float32Array([1, 0.7, 0.2, 1]),
-                  ),
-                ],
-              );
-              mainRenderPass.setBindGroup(0, bindGroup);
-              mainRenderPass.setPipeline(spriteVertextPipeline.pipeline);
-              mainRenderPass.draw(4, sprite.verticesNum);
-            } else {
-              console.warn("スプライトオーバレイ表示ようのパイプライン3がありません");
-            }
-            if (spriteState.selectedVertexIndices.length) {
+              const spriteEdgetPipeline = pipelineManager.getPipelineByID("Overlay-SpriteEdge");
+              if (spriteEdgetPipeline) {
+                mainRenderPass.setPipeline(spriteEdgetPipeline.pipeline);
+                if (sprite.edgesNum) {
+                  const edgeBindGroup = simpleWebGPU.createGroup(
+                    spriteEdgetPipeline.groupLayout,
+                    [
+                      this.renderData.cameraRenderData.cameraBuffer,
+                      renderData.vertexBuffer,
+                      renderData.edgeBuffer,
+                      this.uniform([0.1, 0.7, 1.0, 1]),
+                    ],
+                  );
+                  mainRenderPass.setBindGroup(0, edgeBindGroup);
+                  mainRenderPass.draw(4, sprite.edgesNum);
+                }
+
+                if (sprite.silhouetteEdgesNum) {
+                  const silhouetteEdgeBindGroup = simpleWebGPU.createGroup(
+                    spriteEdgetPipeline.groupLayout,
+                    [
+                      this.renderData.cameraRenderData.cameraBuffer,
+                      renderData.vertexBuffer,
+                      renderData.silhouetteEdgeBuffer,
+                      this.uniform([0.1, 0.7, 0.2, 1]),
+                    ],
+                  );
+                  mainRenderPass.setBindGroup(0, silhouetteEdgeBindGroup);
+                  mainRenderPass.draw(4, sprite.silhouetteEdgesNum);
+                }
+              } else {
+                console.warn("スプライトオーバレイ表示ようのパイプライン2がありません");
+              }
+
               const spriteVertextPipeline = pipelineManager.getPipelineByID("Overlay-SpriteVertex");
               if (spriteVertextPipeline) {
                 const bindGroup = simpleWebGPU.createGroup(
                   spriteVertextPipeline.groupLayout,
                   [
-                    this.spaceData.cameraRenderData.cameraBuffer,
-                    renderData.selectVertexBuffer,
-                    simpleWebGPU.createBuffer(
-                      4 * 4,
-                      ["U"],
-                      new Float32Array([1, 1, 1, 1]),
-                    ),
+                    this.renderData.cameraRenderData.cameraBuffer,
+                    renderData.vertexBuffer,
+                    this.uniform([1, 0.7, 0.2, 1]),
                   ],
                 );
                 mainRenderPass.setBindGroup(0, bindGroup);
                 mainRenderPass.setPipeline(spriteVertextPipeline.pipeline);
-                mainRenderPass.draw(4, spriteState.selectedVertexIndices.length);
+                mainRenderPass.draw(4, sprite.verticesNum);
               } else {
-                console.warn("スプライトオーバレイ表示ようのパイプライン4がありません");
+                console.warn("スプライトオーバレイ表示ようのパイプライン3がありません");
+              }
+              if (renderData.selectedVertexCount) {
+                const spriteVertextPipeline = pipelineManager.getPipelineByID("Overlay-SpriteVertex");
+                if (spriteVertextPipeline) {
+                  const bindGroup = simpleWebGPU.createGroup(
+                    spriteVertextPipeline.groupLayout,
+                    [
+                      this.renderData.cameraRenderData.cameraBuffer,
+                      renderData.selectVertexBuffer,
+                      this.uniform([1, 1, 1, 1]),
+                    ],
+                  );
+                  mainRenderPass.setBindGroup(0, bindGroup);
+                  mainRenderPass.setPipeline(spriteVertextPipeline.pipeline);
+                  mainRenderPass.draw(4, renderData.selectedVertexCount);
+                } else {
+                  console.warn("スプライトオーバレイ表示ようのパイプライン4がありません");
+                }
               }
             }
           }
@@ -483,14 +533,11 @@ export class UIComponent_View extends UIComponent {
 
         // オーバーレイアーマチュア
         for (const armature of armatures) {
-          const renderData = this.spaceData.getRenderData(armature.id);
+          const renderData = this.spaceData.renderData.getRenderData(armature.id);
           if (!(renderData instanceof View_ArmatureRenderData)) continue ;
-          if (!(renderData.boneBuffer && renderData.boneVertexBuffer && renderData.selectBoneVertexBuffer)) continue ;
-
-          const armaturePipeline = pipelineManager.getPipelineByID("Overlay-Armature");
-          if (armaturePipeline) {
-            for (const data of armaturePipeline.vertexBuffers) {
-              /** @type {string} */
+          const armatureBonePipeline = pipelineManager.getPipelineByID("Overlay-ArmatureBone");
+          if (armatureBonePipeline) {
+            for (const data of armatureBonePipeline.vertexBuffers) {
               const source = data.source;
               if (source == "VERTEX") {
                 mainRenderPass.setVertexBuffer(
@@ -500,57 +547,61 @@ export class UIComponent_View extends UIComponent {
               }
             }
             const bindGroup = simpleWebGPU.createGroup(
-              armaturePipeline.groupLayout,
+              armatureBonePipeline.groupLayout,
               [
-                this.spaceData.cameraRenderData.cameraBuffer,
+                this.renderData.cameraRenderData.cameraBuffer,
                 renderData.boneBuffer,
+                this.uniform([1, 0, 0, 1]),
               ],
             );
             mainRenderPass.setBindGroup(0, bindGroup);
-            mainRenderPass.setPipeline(armaturePipeline.pipeline);
+            mainRenderPass.setPipeline(armatureBonePipeline.pipeline);
             mainRenderPass.draw(5, armature.bones.length);
+
+            if (renderData.selectedBoneCount) {
+              const bindGroup = simpleWebGPU.createGroup(
+                armatureBonePipeline.groupLayout,
+                [
+                  this.renderData.cameraRenderData.cameraBuffer,
+                  renderData.selectBoneBuffer,
+                  this.uniform([1, 1, 1, 1]),
+                ],
+              );
+              mainRenderPass.setBindGroup(0, bindGroup);
+              mainRenderPass.setPipeline(armatureBonePipeline.pipeline);
+              mainRenderPass.draw(5, renderData.selectedVertexCount);
+            }
           } else {
             console.warn("アーマチュアオーバレイ表示ようのパイプライン1がありません");
           }
 
           if (editor.editorState.activeObject === armature.model) {
-            const armatureState = editor.editorState.getModelStateByID(armature.id,);
-            if (!(armatureState instanceof ArmatureState)) continue ;
-
             const boneVertexPipeline = pipelineManager.getPipelineByID("Overlay-ArmatureVertex");
             if (boneVertexPipeline) {
               const bindGroup = simpleWebGPU.createGroup(
                 boneVertexPipeline.groupLayout,
                 [
-                  this.spaceData.cameraRenderData.cameraBuffer,
+                  this.renderData.cameraRenderData.cameraBuffer,
                   renderData.boneVertexBuffer,
-                  simpleWebGPU.createBuffer(
-                      4 * 4,
-                      ["U"],
-                      new Float32Array([1, 0, 0, 1]),
-                    ),
+                  this.uniform([1, 0, 0, 1]),
                 ],
               );
               mainRenderPass.setBindGroup(0, bindGroup);
               mainRenderPass.setPipeline(boneVertexPipeline.pipeline);
               mainRenderPass.draw(4, armature.bones.length * 2);
 
-              if (armatureState.selectedVertexNum) {
+              if (renderData.selectedVertexCount) {
                 const bindGroup = simpleWebGPU.createGroup(
                   boneVertexPipeline.groupLayout,
                   [
-                    this.spaceData.cameraRenderData.cameraBuffer,
+                    this.renderData.cameraRenderData.cameraBuffer,
                     renderData.selectBoneVertexBuffer,
-                    simpleWebGPU.createBuffer(
-                      4 * 4,
-                      ["U"],
-                      new Float32Array([1, 1, 1, 1]),
-                    ),
+                    this.uniform([1, 1, 1, 1]),
                   ],
                 );
                 mainRenderPass.setBindGroup(0, bindGroup);
                 mainRenderPass.setPipeline(boneVertexPipeline.pipeline);
-                mainRenderPass.draw(4, armatureState.selectedVertexNum, 0);
+                mainRenderPass.draw(4, renderData.selectedVertexCount, 0);
               }
             } else {
               console.warn("アーマチュアオーバレイ表示ようのパイプライン2がありません");
@@ -586,9 +637,9 @@ export class UIComponent_View extends UIComponent {
 
       // スプライト
       for (const sprite of sprites) {
-        const renderData = this.spaceData.getRenderData(sprite.id);
-        if (!(renderData instanceof View_SpriteRenderData)) return ;
-        if (!(renderData.indexBuffer)) return ;
+        const renderData = this.spaceData.renderData.getRenderData(sprite.id);
+        if (!(renderData instanceof View_SpriteRenderData)) continue;
+        if (!(renderData.indexBuffer)) continue;
 
         const spritePipeline = pipelineManager.getPipelineByID("ObjectID-Sprite");
         if (spritePipeline) {
@@ -609,7 +660,7 @@ export class UIComponent_View extends UIComponent {
           const bindGroup = simpleWebGPU.createGroup(
             spritePipeline.groupLayout,
             [
-              this.spaceData.cameraRenderData.cameraBuffer,
+              this.renderData.cameraRenderData.cameraBuffer,
               renderData.objectIDBuffer,
             ],
           );
@@ -626,9 +677,9 @@ export class UIComponent_View extends UIComponent {
 
       // アーマチュア
       for (const armature of armatures) {
-        const renderData = this.spaceData.getRenderData(armature.id);
-        if (!(renderData instanceof View_ArmatureRenderData)) return ;
-        if (!(renderData.boneBuffer)) return ;
+        const renderData = this.spaceData.renderData.getRenderData(armature.id);
+        if (!(renderData instanceof View_ArmatureRenderData)) continue;
+        if (!(renderData.boneBuffer)) continue;
 
         const armaturePipeline = pipelineManager.getPipelineByID("ObjectID-Armature");
         if (armaturePipeline) {
@@ -644,7 +695,7 @@ export class UIComponent_View extends UIComponent {
           const bindGroup = simpleWebGPU.createGroup(
             armaturePipeline.groupLayout,
             [
-              this.spaceData.cameraRenderData.cameraBuffer,
+              this.renderData.cameraRenderData.cameraBuffer,
               renderData.boneBuffer,
               renderData.objectIDBuffer,
             ],

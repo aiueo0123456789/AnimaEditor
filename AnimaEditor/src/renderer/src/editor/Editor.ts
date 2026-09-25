@@ -1,6 +1,6 @@
 import { ModelNames, Models, Project, ProjectInput } from "../core/project/Project";
 import { System } from "../core/system/System";
-import { UIManager } from "../manager/UIManager";
+import { UIManager } from "../manager/ui/UIManager";
 import { EditorState, States } from "./editorState/EditorState";
 import { Model_Animation, Model_AnimationInput } from "../core/project/model/Animation";
 import { Model_Sprite, Model_SpriteInput } from "../core/project/model/Sprite";
@@ -26,15 +26,15 @@ import { System_Skinning } from "../core/system/animation/SkinningSystem";
 import { projectLoad } from "./serialization/Load";
 import { EditorAPI } from "./EditorAPI";
 import { EventManager } from "../manager/EventManager";
-import { ContextManager } from "../manager/ContextManager";
+import { ContextManager } from "../manager/context/ContextManager";
 import { Runtime_Texture } from "../core/projectCache/runtime/Texture";
 import { Runtime_Animation } from "../core/projectCache/runtime/Animation";
-import { AnimationState } from "./editorState/state/Animation";
+import { AnimationState } from "./editorState/state/States/Animation";
 import { Runtime_Sprite } from "../core/projectCache/runtime/Sprite";
-import { SpriteState } from "./editorState/state/Sprite";
+import { SpriteState } from "./editorState/state/States/Sprite";
 import { Runtime_Armature } from "../core/projectCache/runtime/Armature";
-import { ArmatureState } from "./editorState/state/Armature";
-import { TextureState } from "./editorState/state/Texture";
+import { ArmatureState } from "./editorState/state/States/Armature";
+import { TextureState } from "./editorState/state/States/Texture";
 
 export const rootPath: string = "src/";
 
@@ -68,7 +68,7 @@ export class AnimaEditor {
   public api: EditorAPI;
 
   constructor() {
-    this.project = new Project({ sceneConfig: {projectName: "初期プロジェクト"}, animationConfig: {frameStart: 0, frameEnd: 20, frameSpeed: 0.1} });
+    this.project = new Project({ sceneConfig: {projectName: "初期プロジェクト"}, animationConfig: {frameStart: 0, frameEnd: 20, frameSpeed: 0.1}, models: [] });
     this.projectCache = new ProjectCache(this.project);
     this.systems = [
       new System_Texture(this),
@@ -104,10 +104,6 @@ export class AnimaEditor {
     this.api = new EditorAPI(this);
   }
 
-  createProject(data: ProjectInput) {
-    return new Project(data);
-  }
-
   load() {
     projectLoad(this);
   }
@@ -116,33 +112,37 @@ export class AnimaEditor {
     projectSave(this);
   }
 
+  createProject(data: ProjectInput) {
+    return new Project(data);
+  }
+
   createModel(data: Model_AnimationInput | Model_ArmatureInput | Model_TextureInput | Model_SpriteInput): {model: Models | null, runtime: Runtimes | null, state: States | null} {
-    if (data.modelName === ModelNames.Sprite) return this.addSprite(data);
-    else if (data.modelName === ModelNames.Aramature) return this.addArmature(data);
-    else if (data.modelName === ModelNames.Animation) return this.addAnimation(data);
-    else if (data.modelName === ModelNames.Texture) return this.addTexture(data);
+    if (data.modelName === ModelNames.Sprite) return this.createSprite(data as Model_SpriteInput);
+    else if (data.modelName === ModelNames.Aramature) return this.createArmature(data as Model_ArmatureInput);
+    else if (data.modelName === ModelNames.Animation) return this.createAnimation(data as Model_AnimationInput);
+    else if (data.modelName === ModelNames.Texture) return this.createTexture(data as Model_TextureInput);
     return {model: null, runtime: null, state: null};
   }
 
-  addTexture(data: Model_TextureInput): {model: Model_Texture, runtime: Runtime_Texture, state: TextureState} {
+  createTexture(data: Model_TextureInput): {model: Model_Texture, runtime: Runtime_Texture, state: TextureState} {
     const model = this.project.createTexture(data);
     const runtime = this.projectCache.addTexture(model);
     const state = this.editorState.addTexture(model);
     return {model, runtime, state};
   }
-  addAnimation(data: Model_AnimationInput): {model: Model_Animation, runtime: Runtime_Animation, state: AnimationState} {
+  createAnimation(data: Model_AnimationInput): {model: Model_Animation, runtime: Runtime_Animation, state: AnimationState} {
     const model = this.project.createAnimation(data);
     const runtime = this.projectCache.addAnimation(model);
     const state = this.editorState.addAnimation(model);
     return {model, runtime, state};
   }
-  addSprite(data: Model_SpriteInput): {model: Model_Sprite, runtime: Runtime_Sprite, state: SpriteState} {
+  createSprite(data: Model_SpriteInput): {model: Model_Sprite, runtime: Runtime_Sprite, state: SpriteState} {
     const model = this.project.createSprite(data);
     const runtime = this.projectCache.addSprite(model);
     const state = this.editorState.addSprite(model);
     return {model, runtime, state};
   }
-  addArmature(data: Model_ArmatureInput): {model: Model_Armature, runtime: Runtime_Armature, state: ArmatureState} {
+  createArmature(data: Model_ArmatureInput): {model: Model_Armature, runtime: Runtime_Armature, state: ArmatureState} {
     const model = this.project.createArmature(data);
     const runtime = this.projectCache.addArmature(model);
     const state = this.editorState.addArmature(model);
@@ -190,9 +190,9 @@ export class AnimaEditor {
       ),
     );
     pipelineManager.addPipeline(
-      "Overlay-Armature",
+      "Overlay-ArmatureBone",
       pipelineManager.createRenderPipeline(
-        wgslShaderCodes["view/overlay/Armature"],
+        wgslShaderCodes["view/overlay/ArmatureBone"],
         {
           vertexBuffers: [{ location: 0, source: "VERTEX" }],
         },
@@ -216,6 +216,15 @@ export class AnimaEditor {
             { location: 0, source: "VERTEX" },
             { location: 1, source: "TEXCOORD" },
           ],
+        },
+      ),
+    );
+    pipelineManager.addPipeline(
+      "Overlay-SpriteWeight",
+      pipelineManager.createRenderPipeline(
+        wgslShaderCodes["view/overlay/SpriteWeight"],
+        {
+          vertexBuffers: [],
         },
       ),
     );

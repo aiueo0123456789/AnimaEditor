@@ -61,12 +61,14 @@ class Pose {
 }
 
 export class Runtime_Bone {
+  public boneID: ID;
   public model: Model_Bone;
   public base: Base;
   public animation: Animation;
   public pose: Pose;
   public parent: Runtime_Bone | null;
-  constructor(model: Model_Bone) {
+  constructor(boneID: ID, model: Model_Bone) {
+    this.boneID = boneID;
     this.model = model;
 
     this.base = new Base();
@@ -77,16 +79,16 @@ export class Runtime_Bone {
   }
 
   get id(): ID {
-    return this.model.id;
+    return this.boneID;
   }
 }
 
-export class Runtime_Armature extends Runtime {
-  public static createBone(bone: Model_Bone) {
-    return new Runtime_Bone(bone);
+export class Runtime_Armature extends Runtime<Model_Armature> {
+  public static createBone(boneID: ID, bone: Model_Bone) {
+    return new Runtime_Bone(boneID, bone);
   }
 
-  static referenceResolver = {
+  static override referenceResolver = {
     bones: {
       [ReferenceResolver.PATH.ARRAY]: {
         parent: new ReferenceResolver("parentID"),
@@ -95,13 +97,12 @@ export class Runtime_Armature extends Runtime {
   };
 
 
-  public bones: Runtime_Bone[];
+  public bones: Runtime_Bone[] = [];
+  public boneIDMap: Map<ID, number> = new Map();
   public override model: Model_Armature;
   constructor(model: Model_Armature) {
     super(model);
     this.model = model;
-
-    this.bones = [];
   }
 
   getBoneByID(id: ID): Runtime_Bone | null {
