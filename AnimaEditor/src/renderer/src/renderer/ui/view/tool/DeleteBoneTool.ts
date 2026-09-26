@@ -30,9 +30,12 @@ export class DeleteBoneTool extends Tool {
           edits.push({ model: sprite, path: `boneWeights.${boneWeightID}.boneID`, value: new BoneReference({ aramatureID: "", boneID: "" }) });
     });
     for (const animation of editor.project.getModelsByType(Model_Animation)) {
-      const target = animation.targetID;
-      if (target instanceof BoneReference && target.aramatureID === model.id && ids.has(target.boneID))
-        edits.push({ model: animation, path: "targetID", value: new BoneReference({ aramatureID: "", boneID: "" }) });
+      if (animation.targetID.modelID !== model.id) continue;
+      for (const [trackID, track] of Object.entries(animation.tracks)) {
+        const parts = track.path.split(track.path.includes("/") ? "/" : ".");
+        if (parts[0] === "bones" && ids.has(parts[1]))
+          edits.push({ model: animation, path: `tracks.${trackID}.path`, value: "" });
+      }
     }
     edits.push(
         ...["selectedHeadIDs", "selectedTailIDs"].map(path => ({ model: state, path, value: [] })),

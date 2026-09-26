@@ -1,4 +1,4 @@
-import { Model_Armature, Model_Bone } from "../../../core/project/model/Armature";
+import { Model_Armature } from "../../../core/project/model/Armature";
 import { Vec2, Vec2Math } from "../../../util/vecMath";
 import { AnimaEditor } from "../../Editor";
 import { CommandReturn } from "../primitiveCommand/PrimitiveCommand";
@@ -15,7 +15,7 @@ export class BoneExtrudeCommand extends InteractionCommand {
   private model: Model_Armature;
   private parentID: string;
   private newBoneID: string | null = null;
-  private newBone: Model_Bone | null = null;
+  private newBone: Model_Armature.Bone | null = null;
   private origin: Vec2 = Vec2Math.create();
   private movement: Vec2 = Vec2Math.create();
 

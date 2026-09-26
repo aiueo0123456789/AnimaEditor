@@ -1,4 +1,5 @@
-import type { TimelineData, TimelineKind, TimelineProps } from "../components/Timeline";
+import type { TimelineData, TimelineKind, TimelineProps, TimelineViewState } from "../components/Timeline";
+import { timelineRows } from "./TimelineHierarchy";
 import { createSplitControl } from "./SplitControl";
 import { configurePanelRegion } from "./PanelRegion";
 import { Header } from "../components/Header";
@@ -37,7 +38,7 @@ export function createTimelineControl(props: TimelineProps) {
   heading.textContent = "表示するアニメーション";
   heading.className = "ui-timeline-settings-title";
   popup.append(heading);
-  const state = props.viewState ?? { visibleKinds: ["armature", "sprite", "other"] as TimelineKind[], zoom: 12, trackRatio: .25 };
+  const state: TimelineViewState = props.viewState ?? { visibleKinds: ["armature", "sprite", "other"], zoom: 12, trackRatio: .25 };
   const visible = new Set<TimelineKind>(state.visibleKinds);
   const checkboxes = new Map<TimelineKind, HTMLInputElement>();
   for (const [kind, title] of [["armature", "アーマチュア"], ["sprite", "スプライト"], ["other", "その他"]] as const) {
@@ -62,6 +63,8 @@ export function createTimelineControl(props: TimelineProps) {
   const labels = document.createElement("div");
   labels.className = "ui-timeline-labels";
   const labelContent = document.createElement("div");
+  labelContent.setAttribute("role", "tree");
+  labelContent.setAttribute("aria-label", "Animation tracks");
   labels.append(labelContent);
   split.childContainers[0].append(labels);
   split.childContainers[1].append(scroll);
@@ -136,6 +139,7 @@ export function createTimelineControl(props: TimelineProps) {
   function drawTracks(): void {
     if (!data) return;
     const hadFocus = grid.contains(document.activeElement);
+    const focusedRow = labelContent.contains(document.activeElement) ? (document.activeElement as HTMLElement)?.dataset.rowId : undefined;
     const focusedLabel = document.activeElement?.getAttribute("aria-label");
     if (pointer !== null && ruler?.hasPointerCapture(pointer)) ruler.releasePointerCapture(pointer);
     pointer = null;
@@ -186,30 +190,86 @@ export function createTimelineControl(props: TimelineProps) {
     }, { signal: trackSignal });
     grid.append(ruler);
     const tracks = data.tracks.filter(track => visible.has(track.kind));
-    for (const track of tracks) {
+    const collapsed = new Set(state.collapsedPaths ?? []);
+    const rows = timelineRows(tracks, collapsed);
+    const rowElements = new Map<string, HTMLElement>();
+    for (const row of rows) {
+      const track = row.track;
       const label = document.createElement("div");
       label.className = "ui-timeline-track-label";
-      label.textContent = track.label;
-      label.title = track.label;
-      label.dataset.kind = track.kind;
+      label.title = track?.label ?? row.label;
+      label.dataset.kind = row.kind;
+      label.dataset.rowId = row.id;
+      label.setAttribute("role", "treeitem");
+      label.setAttribute("aria-level", String(row.depth + 1));
+      label.setAttribute("aria-label", row.label);
+      label.tabIndex = -1;
+      label.style.paddingLeft = `${8 + row.depth * 12}px`;
+      const toggle = (): void => {
+        if (collapsed.has(row.id)) collapsed.delete(row.id); else collapsed.add(row.id);
+        state.collapsedPaths = [...collapsed];
+        drawTracks();
+        [...labelContent.querySelectorAll<HTMLElement>("[data-row-id]")].find(item => item.dataset.rowId === row.id)?.focus({ preventScroll: true });
+      };
+      const arrow = document.createElement("span");
+      arrow.className = "ui-timeline-disclosure";
+      arrow.setAttribute("aria-hidden", "true");
+      if (row.branch) {
+        label.setAttribute("aria-expanded", String(!collapsed.has(row.id)));
+        arrow.textContent = collapsed.has(row.id) ? "▸" : "▾";
+        label.classList.add("is-branch");
+        label.addEventListener("click", toggle, { signal: trackSignal });
+      }
+      const caption = document.createElement("span");
+      caption.className = "ui-timeline-row-caption";
+      caption.textContent = row.label;
+      label.append(arrow, caption);
+      label.addEventListener("focus", () => {
+        for (const item of rowElements.values()) item.tabIndex = item === label ? 0 : -1;
+      }, { signal: trackSignal });
+      label.addEventListener("keydown", event => {
+        const index = rows.indexOf(row);
+        let next: string | undefined;
+        if (event.key === "ArrowDown") next = rows[index + 1]?.id;
+        else if (event.key === "ArrowUp") next = rows[index - 1]?.id;
+        else if (event.key === "Home") next = rows[0]?.id;
+        else if (event.key === "End") next = rows.at(-1)?.id;
+        else if (event.key === "ArrowRight") {
+          if (row.branch && collapsed.has(row.id)) toggle();
+          else if (row.branch) next = rows[index + 1]?.id;
+        } else if (event.key === "ArrowLeft") {
+          if (row.branch && !collapsed.has(row.id)) toggle(); else next = row.parentID;
+        } else if ((event.key === "Enter" || event.key === " ") && row.branch) toggle();
+        else return;
+        event.preventDefault(); event.stopPropagation();
+        if (next) rowElements.get(next)?.focus();
+      }, { signal: trackSignal });
+      rowElements.set(row.id, label);
       labelContent.append(label);
       const lane = document.createElement("div");
-      lane.className = "ui-timeline-lane";
-      lane.dataset.trackId = track.id;
-      for (const key of track.keyframes) {
+      lane.className = track ? "ui-timeline-lane" : "ui-timeline-lane ui-timeline-group-lane";
+      if (track) lane.dataset.trackId = track.id;
+      lane.dataset.rowId = row.id;
+      for (const key of track?.keyframes ?? []) {
         if (key.frame < data.frameStart || key.frame > data.frameEnd) continue;
         const button = document.createElement("button");
         button.type = "button";
         button.className = "ui-timeline-key";
         button.style.left = `${(key.frame - data.frameStart) * zoom}px`;
-        button.setAttribute("aria-label", `${track.label}: ${key.frame}`);
+        button.setAttribute("aria-label", `${track!.label}: ${key.frame}`);
         button.setAttribute("aria-pressed", String(key.selected));
-        button.title = `${track.label}: ${key.frame}`;
-        button.addEventListener("click", event => props.onSelectKeyframe(track.id, key.id, event.shiftKey || event.metaKey || event.ctrlKey), { signal: trackSignal });
+        button.title = `${track!.label}: ${key.frame}`;
+        button.addEventListener("click", event => props.onSelectKeyframe(track!.id, key.id, event.shiftKey || event.metaKey || event.ctrlKey), { signal: trackSignal });
         lane.append(button);
       }
       grid.append(lane);
     }
+    const focused = (focusedRow ? rowElements.get(focusedRow) : undefined) ?? rowElements.values().next().value;
+    if (focused) {
+      focused.tabIndex = 0;
+      if (focusedRow) focused.focus({ preventScroll: true });
+    }
+    labels.scrollTop = scroll.scrollTop;
     if (!tracks.length) {
       const empty = document.createElement("div");
       empty.className = "ui-timeline-empty";
@@ -266,7 +326,7 @@ export function createTimelineControl(props: TimelineProps) {
       for (const [kind, input] of checkboxes) input.checked = visible.has(kind);
       zoom = Math.max(2, Math.min(64, state.zoom));
       split.setRatio(state.trackRatio);
-      const next = JSON.stringify([value.frameStart, value.frameEnd, value.tracks, [...visible], zoom]);
+      const next = JSON.stringify([value.frameStart, value.frameEnd, value.tracks, [...visible], zoom, state.collapsedPaths]);
       if (next !== signature) { signature = next; drawTracks(); }
       else updateFrame();
     },

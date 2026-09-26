@@ -131,6 +131,12 @@
 .ui-timeline-track-label[data-kind="armature"] { border-left: 2px solid #92bf9d; }
 .ui-timeline-track-label[data-kind="sprite"] { border-left: 2px solid #d6bb74; }
 .ui-timeline-track-label[data-kind="other"] { border-left: 2px solid #b7a5c2; }
+.ui-timeline-track-label { display: flex; align-items: center; gap: 4px; }
+.ui-timeline-disclosure { flex: 0 0 12px; width: 12px; }
+.ui-timeline-row-caption { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ui-timeline-track-label.is-branch { cursor: pointer; background: var(--bg-recessed); }
+.ui-timeline-track-label:focus-visible { outline: 1px solid var(--ui-focus); outline-offset: -2px; }
+.ui-timeline-group-lane { background: var(--bg-recessed); }
 .ui-timeline-lane { position: relative; height: 30px; border-bottom: 1px solid var(--border-subtle); background: var(--overlay-0); }
 .ui-timeline-key { appearance: none; position: absolute; top: 10px; width: 10px; height: 10px; padding: 0; border: 1px solid var(--text-primary); border-radius: 1px; background: var(--text-secondary); transform: translateX(-50%) rotate(45deg); cursor: pointer; }
 .ui-timeline-key[aria-pressed="true"] { background: var(--color-keyframe-selected); border-color: var(--color-keyframe-selected); }

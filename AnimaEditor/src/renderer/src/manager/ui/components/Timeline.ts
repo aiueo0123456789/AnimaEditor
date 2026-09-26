@@ -7,6 +7,8 @@ export interface TimelineTrack {
   readonly id: string;
   readonly label: string;
   readonly kind: TimelineKind;
+  readonly path?: string;
+  readonly group?: { readonly id: string; readonly label: string };
   readonly keyframes: readonly { id: string; frame: number; selected: boolean }[];
 }
 export interface TimelineData {
@@ -20,6 +22,7 @@ export interface TimelineViewState {
   visibleKinds: TimelineKind[];
   zoom: number;
   trackRatio: number;
+  collapsedPaths?: string[];
 }
 export interface TimelineProps extends WidgetProps {
   readonly viewState?: TimelineViewState;

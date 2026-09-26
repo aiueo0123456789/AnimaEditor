@@ -2,7 +2,6 @@ import { Runtime } from "../Runtime";
 import { KeyframeInterpolation, Model_Animation } from "../../project/model/Animation";
 import { ID } from "../../../editor/Editor";
 import { System_Runtime_ReferencesResolver } from "../../system/runtime/Runtime";
-import { BoneReference } from "../../project/model/Armature";
 import { ModelReference } from "../../project/Model";
 
 
@@ -48,8 +47,7 @@ export class Runtime_Animation extends Runtime<Model_Animation> {
   }
 
   resolveReferences(referencesResolver: System_Runtime_ReferencesResolver): void {
-    if (this.model.targetID instanceof BoneReference) this.target = referencesResolver.bone(this.model.targetID);
-    else if (this.model.targetID instanceof ModelReference) this.target = referencesResolver.model(this.model.targetID);
+    if (this.model.targetID instanceof ModelReference) this.target = referencesResolver.model(this.model.targetID);
     else this.target = null;
   }
 }

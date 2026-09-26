@@ -1,4 +1,4 @@
-import { Model_Armature, type Model_Bone } from "../../../../core/project/model/Armature";
+import { Model_Armature } from "../../../../core/project/model/Armature";
 import { ArmatureState } from "../../../../editor/editorState/state/States/Armature";
 import { AddDictionaryValuesCommand } from "../../../../editor/command/interactionCommand/AddDictionaryValuesCommand";
 import type { AnimaEditor } from "../../../../editor/Editor";
@@ -8,7 +8,7 @@ import type { UIComponent_View } from "../View";
 import { Vec2Math } from "../../../../util/vecMath";
 import { DragTool } from "./DragTool";
 export class AddBoneTool extends DragTool {
-  private additions: { key: string; value: Model_Bone }[] = [];
+  private additions: { key: string; value: Model_Armature.Bone }[] = [];
   protected start(editor: AnimaEditor, _view: UIComponent_View, recorder: CommandRecorder): void {
     const model = editor.editorState.activeObject;
     if (!(model instanceof Model_Armature)) return;

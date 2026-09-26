@@ -1,29 +1,18 @@
 import { Runtime_Animation } from "../../projectCache/runtime/Animation";
 import { System } from "../System";
 
-// Model paths use IDs; runtime collections use dense arrays and ID/index maps.
-const collectionMaps: Record<string, string> = {
-  bones: "boneIDMap", vertices: "vertexIDMap", boneWeights: "boneWeightIDMap",
-  edges: "edgeIDMap", silhouetteEdges: "silhouetteEdgeIDMap",
-};
 const forbidden = new Set(["__proto__", "prototype", "constructor", "model"]);
 
 function resolveProperty(target: object, path: string): { object: Record<string, unknown>; key: string } | null {
-  const parts = path.split(".");
+  const parts = path.split(path.includes("/") ? "/" : ".");
   if (parts.some(part => !part || forbidden.has(part))) return null;
   let current: unknown = target;
-  let indices: Map<string, number> | undefined;
   for (let i = 0; i < parts.length; i++) {
     if (current === null || typeof current !== "object") return null;
     const object = current as Record<string, unknown>;
-    const part = parts[i];
-    const key = Array.isArray(current) && indices
-      ? indices.get(part)?.toString() ?? (/^(0|[1-9]\d*)$/.test(part) ? part : undefined)
-      : part;
-    if (key === undefined || !Object.hasOwn(object, key)) return null;
+    const key = parts[i];
+    if (!Object.hasOwn(object, key)) return null;
     if (i === parts.length - 1) return { object, key };
-    const map = collectionMaps[part] ? object[collectionMaps[part]] : undefined;
-    indices = map instanceof Map ? map : undefined;
     current = object[key];
   }
   return null;

@@ -1,7 +1,7 @@
 
 import { ID } from "../../../editor/Editor";
 import { Mat3, Mat3Math, Vec2, Vec2Math } from "../../../util/vecMath";
-import { BoneReference, Model_Armature, Model_Bone } from "../../project/model/Armature";
+import { BoneReference, Model_Armature } from "../../project/model/Armature";
 import { System_Runtime_ReferencesResolver } from "../../system/runtime/Runtime";
 import { Runtime } from "../Runtime";
 
@@ -63,12 +63,12 @@ class Pose {
 
 export class Runtime_Bone {
   public boneID: ID;
-  public model: Model_Bone;
+  public model: Model_Armature.Bone;
   public base: Base;
   public animation: Animation;
   public pose: Pose;
   public parent: Runtime_Bone | null;
-  constructor(boneID: ID, model: Model_Bone) {
+  constructor(boneID: ID, model: Model_Armature.Bone) {
     this.boneID = boneID;
     this.model = model;
 
@@ -85,7 +85,7 @@ export class Runtime_Bone {
 }
 
 export class Runtime_Armature extends Runtime<Model_Armature> {
-  public static createBone(boneID: ID, bone: Model_Bone) {
+  public static createBone(boneID: ID, bone: Model_Armature.Bone) {
     return new Runtime_Bone(boneID, bone);
   }
 

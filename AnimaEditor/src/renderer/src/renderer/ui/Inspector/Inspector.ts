@@ -11,6 +11,8 @@ import type { Widget } from "../../../manager/ui/components";
 import { commitUIAddValue, commitUIProperty } from "../../../manager/ui/commands";
 import { UIComponent } from "../UI";
 import { UIComponent_Inspector_SpaceData } from "./SpaceData";
+import { Model_Animation } from "../../../core/project/model/Animation";
+import { AnimationState } from "../../../editor/editorState/state/States/Animation";
 
 export class UIComponent_Inspector extends UIComponent {
   private handle: WidgetHandle | null = null;
@@ -36,91 +38,118 @@ export class UIComponent_Inspector extends UIComponent {
     const build = (): Widget => {
       const model = editor.editorState.activeObject;
       const children: Widget[] = [];
-      if (model instanceof Model_Sprite || model instanceof Model_Armature) {
-        children.push(TextField({
-          label: "名前",
-          observeEvents: [createChangeEvent(model, "name")],
-          value: bind({ read: () => model.name }),
-          onChange: () => {},
-          onCommit: value => { if (model.name !== value) commitUIProperty(commands, model, "name", value); },
-        }));
-        children.push(Slider({ label: "透明度", value: 1, min: 0, max: 1, disabled: true, onChange: () => {} }));
-      }
-      if (model instanceof Model_Sprite) {
-        const texture = (): Widget => Select({
-          label: "テクスチャ",
-          observeEvents: [
-            new EditorEvent(EditorEventType.add, editor.project, "models"),
-            new EditorEvent(EditorEventType.delete, editor.project, "models"),
-            ...editor.project.getModelsByType(Model_Texture).map(item => {
-              return createChangeEvent(item, "name");
-            }),
-          ],
-          rebuild: texture,
-          options: editor.project.getModelsByType(Model_Texture).map(item => ({ value: item.id, label: item.name })),
-          value: bind({ read: () => model.textureID.modelID, observeEvents: [createChangeEvent(model, "textureID.modelID")] }),
-          onChange: value => { if (value !== null) commitUIProperty(commands, model, "textureID.modelID", value); },
-        });
-        const weights = (): Widget => {
-          const state = editor.editorState.getModelStateByID(model.id);
-          return Section({
-            title: "ボーンウェイト", rebuild: weights,
+      if (model) {
+        const state = editor.editorState.getModelStateByID(model.id);
+        if (model instanceof Model_Sprite || model instanceof Model_Armature) {
+          children.push(TextField({
+            label: "名前",
+            observeEvents: [createChangeEvent(model, "name")],
+            value: bind({ read: () => model.name }),
+            onChange: () => {},
+            onCommit: value => { if (model.name !== value) commitUIProperty(commands, model, "name", value); },
+          }));
+          children.push(Slider({ label: "透明度", value: 1, min: 0, max: 1, disabled: true, onChange: () => {} }));
+        }
+        if (model instanceof Model_Sprite) {
+          const texture = (): Widget => Select({
+            label: "テクスチャ",
             observeEvents: [
-              new EditorEvent(EditorEventType.add, model, "boneWeights"),
-              new EditorEvent(EditorEventType.delete, model, "boneWeights"),
+              new EditorEvent(EditorEventType.add, editor.project, "models"),
+              new EditorEvent(EditorEventType.delete, editor.project, "models"),
+              ...editor.project.getModelsByType(Model_Texture).map(item => {
+                return createChangeEvent(item, "name");
+              }),
             ],
-            children: [
-              List({
-                label: "ボーンウェイト",
-                height: this.spaceData.boneWeightListHeight,
-                onHeightChange: height => { this.spaceData.boneWeightListHeight = height; this.renderedListHeight = height; },
-                children: Object.entries(model.boneWeights).map(([boneWeightID, weight]) => {
-                  return RenameButton({
-                    key: boneWeightID,
-                    label: bind({ read: () => weight.name, observeEvents: [createChangeEvent(model, `boneWeights.${boneWeightID}.name`)] }),
-                    pressed: bind({
-                      observeEvents: [createChangeEvent(state, "activeBoneWeightID")],
-                      read: () => state !== null && "activeBoneWeightID" in state && state.activeBoneWeightID === boneWeightID,
-                    }),
-                    onPress: () => {
-                      if (state && "activeBoneWeightID" in state && state.activeBoneWeightID !== boneWeightID)
-                        commitUIProperty(commands, state, "activeBoneWeightID", boneWeightID);
-                    },
-                    onRename: name => {
-                      if (model.boneWeights[boneWeightID]?.name !== name)
-                        commitUIProperty(commands, model, `boneWeights.${boneWeightID}.name`, name);
-                    },
-                  });
-                })
-              }), Row({ children: [
-                Button({ label: "追加", onPress: () => {
-                  commitUIAddValue(commands, model, "boneWeights", crypto.randomUUID(), Model_Sprite.createBoneWeight({
-                    name: "名称未設定",
-                    weights: {},
-                    boneID: new BoneReference({aramatureID: "", boneID: ""})
-                  }));
-                }}),
-                Button({ label: "削除", disabled: true, onPress: () => {} }),
-              ]})
-            ],
+            rebuild: texture,
+            options: editor.project.getModelsByType(Model_Texture).map(item => ({ value: item.id, label: item.name })),
+            value: bind({ read: () => model.textureID.modelID, observeEvents: [createChangeEvent(model, "textureID.modelID")] }),
+            onChange: value => { if (value !== null) commitUIProperty(commands, model, "textureID.modelID", value); },
           });
-        };
-        const boneTarget = (): Widget => Select({
-          label: "選択中", disabled: true, value: null, placeholder: "未選択", onChange: () => {},
-          rebuild: boneTarget,
-          observeEvents: [
-            new EditorEvent(EditorEventType.add, editor.project, "models"),
-            new EditorEvent(EditorEventType.delete, editor.project, "models"),
-            ...editor.project.getModelsByType(Model_Armature).flatMap(arm => [
-              // createChangeEvent(arm, ""),
-              new EditorEvent(EditorEventType.add, arm, "bones"),
-              new EditorEvent(EditorEventType.delete, arm, "bones"),
-            ]),
-          ],
-          options: editor.project.getModelsByType(Model_Armature).flatMap(arm =>
-            Object.entries(arm.bones).map(([boneID, bone]) => ({ value: arm.id + "&" + boneID, label: arm.name + ": " + bone.name }))),
-        });
-        children.push(texture(), weights(), boneTarget());
+          const weights = (): Widget => {
+            return Section({
+              title: "ボーンウェイト", rebuild: weights,
+              observeEvents: [
+                new EditorEvent(EditorEventType.add, model, "boneWeights"),
+                new EditorEvent(EditorEventType.delete, model, "boneWeights"),
+              ],
+              children: [
+                List({
+                  label: "ボーンウェイト",
+                  height: this.spaceData.boneWeightListHeight,
+                  onHeightChange: height => { this.spaceData.boneWeightListHeight = height; this.renderedListHeight = height; },
+                  children: Object.entries(model.boneWeights).map(([boneWeightID, weight]) => {
+                    return RenameButton({
+                      key: boneWeightID,
+                      label: bind({ read: () => weight.name, observeEvents: [createChangeEvent(model, `boneWeights.${boneWeightID}.name`)] }),
+                      pressed: bind({
+                        observeEvents: [createChangeEvent(state, "activeBoneWeightID")],
+                        read: () => state !== null && "activeBoneWeightID" in state && state.activeBoneWeightID === boneWeightID,
+                      }),
+                      onPress: () => {
+                        if (state && "activeBoneWeightID" in state && state.activeBoneWeightID !== boneWeightID) commitUIProperty(commands, state, "activeBoneWeightID", boneWeightID);
+                      },
+                      onRename: name => {
+                        if (model.boneWeights[boneWeightID]?.name !== name) commitUIProperty(commands, model, `boneWeights.${boneWeightID}.name`, name);
+                      },
+                    });
+                  })
+                }), Row({ children: [
+                  Button({ label: "追加", onPress: () => {
+                    commitUIAddValue(commands, model, "boneWeights", crypto.randomUUID(), Model_Sprite.createBoneWeight({
+                      name: "名称未設定",
+                      weights: {},
+                      boneID: new BoneReference({aramatureID: "", boneID: ""})
+                    }));
+                  }}),
+                  Button({ label: "削除", disabled: true, onPress: () => {} }),
+                ]})
+              ],
+            });
+          };
+          const boneTarget = (): Widget => Select({
+            label: "選択中", disabled: true, value: null, placeholder: "未選択", onChange: () => {},
+            rebuild: boneTarget,
+            observeEvents: [
+              new EditorEvent(EditorEventType.add, editor.project, "models"),
+              new EditorEvent(EditorEventType.delete, editor.project, "models"),
+              ...editor.project.getModelsByType(Model_Armature).flatMap(arm => [
+                // createChangeEvent(arm, ""),
+                new EditorEvent(EditorEventType.add, arm, "bones"),
+                new EditorEvent(EditorEventType.delete, arm, "bones"),
+              ]),
+            ],
+            options: editor.project.getModelsByType(Model_Armature).flatMap(arm =>
+              Object.entries(arm.bones).map(([boneID, bone]) => ({ value: arm.id + "&" + boneID, label: arm.name + ": " + bone.name }))),
+          });
+          children.push(texture(), weights(), boneTarget());
+        }
+        if (model instanceof Model_Animation && state instanceof AnimationState) {
+          const tracks = (): Widget => List({
+            label: "トラック",
+            observeEvents: [
+              new EditorEvent(EditorEventType.add, model, "tracks"),
+              new EditorEvent(EditorEventType.delete, model, "tracks"),
+            ],
+            rebuild: tracks,
+            children: Object.entries(model.tracks).map(([trackID, track]) => {
+              return RenameButton({
+                key: trackID,
+                label: bind({ read: () => track.name, observeEvents: [createChangeEvent(model, `tracks.${trackID}.name`)] }),
+                pressed: bind({
+                  observeEvents: [createChangeEvent(state, "activeTrackID")],
+                  read: () => state !== null && "activeTrackID" in state && state.activeTrackID === trackID,
+                }),
+                onPress: () => {
+                  if (state && "activeTrackID" in state && state.activeTrackID !== trackID) commitUIProperty(commands, state, "activeTrackID", trackID);
+                },
+                onRename: name => {
+                  if (model.tracks[trackID]?.name !== name) commitUIProperty(commands, model, `tracks.${trackID}.name`, name);
+                },
+              });
+            })
+          });
+          children.push(tracks());
+        }
       }
       return Column({
         className: "ui-panel", rebuild: build,

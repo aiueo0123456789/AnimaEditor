@@ -9,7 +9,7 @@ export interface BoneReferenceInput {
   boneID: ID
 }
 export type BoneID = ID;
-export interface Model_BoneInput {
+interface Model_BoneInput {
   head?: Vec2,
   tail?: Vec2,
   parentID?: BoneReferenceInput,
@@ -30,7 +30,7 @@ export class BoneReference {
   }
 }
 
-export class Model_Bone {
+class Bone {
   public name: string;
   public head: Vec2;
   public tail: Vec2;
@@ -45,16 +45,22 @@ export class Model_Bone {
 }
 
 export class Model_Armature extends Model {
-  public static createBone(data: Model_BoneInput): Model_Bone {
-    return new Model_Bone(data);
+  static Bone = Bone;
+
+  public static createBone(data: Model_BoneInput): Bone {
+    return new Bone(data);
   }
 
-  public bones: Record<BoneID, Model_Bone>;
+  public bones: Record<BoneID, Bone>;
   constructor(data: Model_ArmatureInput) {
     super(data);
 
     this.bones = Object.fromEntries(
-      Object.entries(data.bones ?? {}).map(([id, bone]) => [id, new Model_Bone(bone)]),
+      Object.entries(data.bones ?? {}).map(([id, bone]) => [id, new Bone(bone)]),
     );
   }
+}
+
+export namespace Model_Armature {
+  export type Bone = InstanceType<typeof Bone>;
 }

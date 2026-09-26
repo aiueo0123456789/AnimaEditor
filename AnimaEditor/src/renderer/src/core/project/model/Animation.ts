@@ -1,6 +1,5 @@
 import { ID } from "../../../editor/Editor";
 import { Model, ModelInput, ModelReference, ModelReferenceInput } from "../Model";
-import { BoneReference, BoneReferenceInput } from "./Armature";
 
 export enum KeyframeInterpolation {
   LINEAR = 0,
@@ -13,14 +12,15 @@ interface KeyframeInput {
   interpolation?: KeyframeInterpolation
 };
 
-interface Model_AnimationTrackInput {
-  keyframes?: KeyframeInput[],
+interface TrackInput {
+  name?: string
   path?: string,
+  keyframes?: KeyframeInput[],
 }
 
 export interface Model_AnimationInput extends ModelInput {
-  targetID: ModelReferenceInput | BoneReferenceInput,
-  tracks: Record<ID, Model_AnimationTrackInput>,
+  targetID: ModelReferenceInput,
+  tracks: Record<ID, TrackInput>,
 };
 
 class Keyframe {
@@ -36,32 +36,45 @@ class Keyframe {
   }
 }
 
-export class Model_AnimationTrack {
+class Track {
+  public name: string;
   public path: string;
   public keyframes: Keyframe[];
-  constructor(data: Model_AnimationTrackInput) {
-    this.keyframes = data.keyframes ? data.keyframes.map((keyframe) => new Keyframe(keyframe)) : [];
+  constructor(data: TrackInput) {
+    this.name = data.name ?? "名称未設定";
     this.path = data.path ?? "";
+    this.keyframes = data.keyframes ? data.keyframes.map((keyframe) => new Keyframe(keyframe)) : [];
   }
 }
 
 export class Model_Animation extends Model {
+  static Keyframe = Keyframe;
+  static Track = Track;
+
   static createKeyframe(data: KeyframeInput): Keyframe {
     return new Keyframe(data);
   }
 
-  public targetID: ModelReference | BoneReference;
-  public tracks: Record<ID, Model_AnimationTrack>;
+  public targetID: ModelReference;
+  public tracks: Record<ID, Track>;
   constructor(data: Model_AnimationInput) {
     super(data);
 
-    this.targetID = "modelID" in data.targetID ? new ModelReference(data.targetID) : new BoneReference(data.targetID);
+    if (!data.targetID || typeof data.targetID.modelID !== "string") {
+      throw new TypeError("Animation target must be a Model reference");
+    }
+    this.targetID = new ModelReference(data.targetID);
     this.tracks = Object.fromEntries(
-      Object.entries(data.tracks ?? {}).map(([id, track]) => [id, new Model_AnimationTrack(track)]),
+      Object.entries(data.tracks ?? {}).map(([id, track]) => [id, new Track(track)]),
     );
   }
 
   get tracksNum() {
     return Object.keys(this.tracks).length;
   }
+}
+
+export namespace Model_Animation {
+  export type Keyframe = InstanceType<typeof Keyframe>;
+  export type Track = InstanceType<typeof Track>;
 }

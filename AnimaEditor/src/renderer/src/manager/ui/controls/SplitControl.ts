@@ -45,12 +45,12 @@ export function createSplitControl(props: SplitOptions) {
     render();
     props.onRatioChange?.(ratio);
   }
-  function finish(cancel: boolean): void {
+  function finish(): void {
     const id = pointer;
     pointer = null;
     element.classList.remove("is-resizing");
     if (id !== null && separator.hasPointerCapture(id)) separator.releasePointerCapture(id);
-    if (cancel && id !== null) { ratio = startRatio; render(); props.onRatioChange?.(ratio); }
+    // if (cancel && id !== null) { ratio = startRatio; render(); props.onRatioChange?.(ratio); }
   }
   separator.addEventListener("pointerdown", event => {
     if (event.button !== 0 || pointer !== null) return;
@@ -69,11 +69,10 @@ export function createSplitControl(props: SplitOptions) {
     const { available } = metrics();
     if (available) change(((vertical ? event.clientY - rect.top : event.clientX - rect.left) - offset) / available);
   }, { signal });
-  separator.addEventListener("pointerup", event => { if (event.pointerId === pointer) finish(false); }, { signal });
-  separator.addEventListener("pointercancel", () => finish(true), { signal });
-  separator.addEventListener("lostpointercapture", () => finish(true), { signal });
+  separator.addEventListener("pointerup", event => { if (event.pointerId === pointer) finish(); }, { signal });
+  separator.addEventListener("pointercancel", () => finish(), { signal });
+  separator.addEventListener("lostpointercapture", () => finish(), { signal });
   separator.addEventListener("keydown", event => {
-    if (event.key === "Escape" && pointer !== null) { event.preventDefault(); event.stopPropagation(); finish(true); return; }
     const step = event.shiftKey ? .1 : .01;
     const values: Record<string, number> = { Home: 0, End: 1,
       [vertical ? "ArrowUp" : "ArrowLeft"]: effective - step,
@@ -88,6 +87,6 @@ export function createSplitControl(props: SplitOptions) {
       ratio = Math.max(0, Math.min(1, value));
       render();
     },
-    dispose(): void { controller.abort(); finish(false); resize.disconnect(); element.remove(); },
+    dispose(): void { controller.abort(); finish(); resize.disconnect(); element.remove(); },
   };
 }

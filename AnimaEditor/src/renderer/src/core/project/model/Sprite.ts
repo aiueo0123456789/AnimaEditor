@@ -10,77 +10,77 @@ interface BBox {
 }
 
 export type BoneWeightID = ID;
-export interface Model_BoneWeightInput {
+interface BoneWeightInput {
   boneID: BoneReferenceInput,
   weights: Record<ID, number>, // 頂点のweight
   name: string,
 }
 
-export class Model_BoneWeight {
+class BoneWeight {
   public boneID: BoneReference;
   public weights: Record<string, number>;
   public name: string;
-  constructor(data: Model_BoneWeightInput) {
+  constructor(data: BoneWeightInput) {
     this.boneID = new BoneReference(data.boneID);
     this.weights = data.weights;
     this.name = data.name ?? "名称未設定";
   }
 }
 
-export interface Model_VertexInput {
+interface VertexInput {
   co?: Vec2,
 }
 
 export type VertexID = ID;
 export type EdgeID = ID;
 
-export interface Model_EdgeInput {
+interface EdgeInput {
   vertices: [ID, ID],
 }
 
 export interface Model_SpriteInput extends ModelInput {
   textureID: ModelReferenceInput,
   textureRect?: BBox,
-  vertices?: Record<VertexID, Model_VertexInput>,
-  silhouetteEdges?: Record<EdgeID, Model_EdgeInput>,
-  edges?: Record<EdgeID, Model_EdgeInput>,
-  boneWeights?: Record<BoneWeightID, Model_BoneWeightInput>,
+  vertices?: Record<VertexID, VertexInput>,
+  silhouetteEdges?: Record<EdgeID, EdgeInput>,
+  edges?: Record<EdgeID, EdgeInput>,
+  boneWeights?: Record<BoneWeightID, BoneWeightInput>,
   zIndex: number;
 }
 
-export class Model_Vertex {
+class Vertex {
   public co: Vec2;
-  constructor(data: Model_VertexInput) {
+  constructor(data: VertexInput) {
     this.co = data.co ?? Vec2Math.create();
   }
 }
 
-export class Model_Edge {
+class Edge {
   public vertices: [ID, ID];
-  constructor(data: Model_EdgeInput) {
+  constructor(data: EdgeInput) {
     this.vertices = data.vertices;
   }
 }
 
 export class Model_Sprite extends Model {
-  static createVertex(data: Model_VertexInput) {
-    return new Model_Vertex(data);
+  static createVertex(data: VertexInput) {
+    return new Vertex(data);
   }
 
-  static createBoneWeight(data: Model_BoneWeightInput) {
-    return new Model_BoneWeight(data);
+  static createBoneWeight(data: BoneWeightInput) {
+    return new BoneWeight(data);
   }
 
-  static createEdge(data: Model_EdgeInput) {
-    return new Model_Edge(data);
+  static createEdge(data: EdgeInput) {
+    return new Edge(data);
   }
 
   public textureID: ModelReference;
   public textureRect: BBox;
-  public vertices: Record<VertexID, Model_Vertex>;
-  public silhouetteEdges: Record<EdgeID, Model_Edge>;
-  public edges: Record<EdgeID, Model_Edge>;
-  public boneWeights: Record<BoneWeightID, Model_BoneWeight>;
+  public vertices: Record<VertexID, Vertex>;
+  public silhouetteEdges: Record<EdgeID, Edge>;
+  public edges: Record<EdgeID, Edge>;
+  public boneWeights: Record<BoneWeightID, BoneWeight>;
   public center: Vec2; // テクスチャの中心
   public zIndex: number;
 
@@ -119,4 +119,10 @@ export class Model_Sprite extends Model {
   get boneWeightsNum() {
     return Object.keys(this.boneWeights).length;
   }
+}
+
+export namespace Model_Armature {
+  export type Vertex = InstanceType<typeof Vertex>;
+  export type Edge = InstanceType<typeof Edge>;
+  export type BoneWeight = InstanceType<typeof BoneWeight>;
 }

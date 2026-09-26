@@ -31,11 +31,13 @@ export class UIComponent_Timeline extends UIComponent {
       currentFrame: runtime.currentFrame, playing: runtime.isPlay,
       tracks: editor.project.getModelsByType(Model_Animation).flatMap(animation => {
         const reference = animation.targetID;
-        const target = editor.project.getModelByID("modelID" in reference ? reference.modelID : reference.aramatureID);
+        const target = editor.project.getModelByID(reference.modelID);
         const kind: TimelineKind = target instanceof Model_Armature ? "armature" : target instanceof Model_Sprite ? "sprite" : "other";
         const state = editor.editorState.getModelStateByID(animation.id);
         return Object.entries(animation.tracks).map(([trackID, track]) => ({
           id: JSON.stringify([animation.id, trackID]), label: `${animation.name} / ${track.path || trackID}`, kind,
+          group: { id: animation.id, label: animation.name },
+          path: track.path.replaceAll("/", "."),
           keyframes: track.keyframes.map(key => ({
             id: key.id, frame: key.frame,
             selected: state instanceof AnimationState && state.selectKeyframeIDs.includes(key.id),
