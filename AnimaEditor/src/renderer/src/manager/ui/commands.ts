@@ -4,6 +4,29 @@ import { SetPropertyCommand, SetPropertyCommandInput } from "../../editor/comman
 import { CommandManager } from "../CommandManager";
 
 import type { PropertyRoot } from "../../editor/command/PropertyRoot";
+import type { Models } from "../../core/project/Project";
+import { SetActiveObjectCommand } from "../../editor/command/interactionCommand/SetActiveObjectCommand";
+import { SetPropertiesCommand, type PropertyEdit } from "../../editor/command/interactionCommand/SetPropertiesCommand";
+
+export function commitUIActiveObject(manager: CommandManager, newActiveObject: Models | null): void {
+  if (manager.commandRecorder) return;
+  const recorder = manager.setCommandRecorder("Select object");
+  if (!recorder) return;
+  recorder.setCommand(SetActiveObjectCommand, { newActiveObject });
+  if (!recorder.command) { manager.cancelCommandRecorder(); return; }
+  recorder.commitCommand();
+  manager.commitCommandRecorder();
+}
+
+export function commitUIProperties(manager: CommandManager, name: string, edits: PropertyEdit[]): void {
+  if (manager.commandRecorder || !edits.length) return;
+  const recorder = manager.setCommandRecorder(name);
+  if (!recorder) return;
+  recorder.setCommand(SetPropertiesCommand, { edits });
+  if (!recorder.command) { manager.cancelCommandRecorder(); return; }
+  recorder.commitCommand();
+  manager.commitCommandRecorder();
+}
 export function commitUIProperty(manager: CommandManager, model: PropertyRoot, path: string, newValue: unknown): void {
   if (!model || manager.commandRecorder) return;
   const recorder = manager.setCommandRecorder("commitUIProperty: " + path);

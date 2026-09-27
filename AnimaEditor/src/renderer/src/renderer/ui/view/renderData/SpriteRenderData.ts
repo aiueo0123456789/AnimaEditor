@@ -2,6 +2,7 @@ import { Runtime_Sprite } from "../../../../core/projectCache/runtime/Sprite";
 import { SpriteState } from "../../../../editor/editorState/state/States/Sprite";
 import { simpleWebGPU } from "../../../../util/simpleWebGPU";
 import { View_ModelRenderData } from "./ModelRenderData";
+import type { ViewGeometrySource } from "../ViewGeometry";
 
 export class View_SpriteRenderData extends View_ModelRenderData {
   public selectedVertexCount = 0;
@@ -30,10 +31,15 @@ export class View_SpriteRenderData extends View_ModelRenderData {
     this.objectIDBuffer = simpleWebGPU.createBuffer(4, ["U"]);
   }
 
-  public update(sprite: Runtime_Sprite, spriteState: SpriteState): void {
+  public update(sprite: Runtime_Sprite, spriteState: SpriteState, source: ViewGeometrySource = "runtime"): void {
+    // Keep the runtime index order for shared topology and UVs, even in Model mode.
+    const vertices = source === "runtime" ? sprite.vertices : sprite.vertices.map(() => [0, 0]);
+    if (source === "model") for (const [id, index] of sprite.vertexIDMap) {
+      if (sprite.model.vertices[id]) vertices[index] = sprite.model.vertices[id].co;
+    }
     const selectedVertices = [...new Set(spriteState.selectedVertexIDs)].flatMap(id => {
       const index = sprite.vertexIDMap.get(id);
-      return index === undefined || !sprite.vertices[index] ? [] : [sprite.vertices[index]];
+      return index === undefined || !vertices[index] ? [] : [vertices[index]];
     });
     this.selectedVertexCount = selectedVertices.length;
     if (Math.max(32, sprite.verticesNum * 1 * 4) !== this.weightBuffer?.size) {
@@ -84,7 +90,7 @@ export class View_SpriteRenderData extends View_ModelRenderData {
     }
     simpleWebGPU.writeBuffer(
       this.vertexBuffer,
-      new Float32Array(sprite.vertices.flat())
+      new Float32Array(vertices.flat())
     );
     simpleWebGPU.writeBuffer(
       this.selectVertexBuffer,

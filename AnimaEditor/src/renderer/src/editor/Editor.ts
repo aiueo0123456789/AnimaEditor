@@ -10,6 +10,7 @@ import { System_Init_Armature } from "../core/system/init/Armature";
 import { System_Init_Animation } from "../core/system/init/Animation";
 import { System_Runtime } from "../core/system/runtime/Runtime";
 import { System_Animation } from "../core/system/animation/Animation";
+import { System_ApplyAnimation } from "../core/system/animation/ApplyAnimation";
 import { Manager } from "../manager/Manager";
 import { PipelineManager } from "../manager/PipelineManager";
 import { CommandManager } from "../manager/CommandManager";
@@ -78,6 +79,7 @@ export class AnimaEditor {
       new System_Init_Animation(this),
       new System_Runtime(this),
       new System_Animation(this),
+      new System_ApplyAnimation(this),
       new System_Bone(this),
       new System_Skinning(this),
     ];

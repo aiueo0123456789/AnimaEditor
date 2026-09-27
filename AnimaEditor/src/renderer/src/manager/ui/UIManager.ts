@@ -19,11 +19,12 @@ import { UIComponent_Preview_SpaceData } from "../../renderer/ui/preview/SpaceDa
 import { UIComponent_Project_SpaceData } from "../../renderer/ui/Project/SpaceData";
 import { UIComponent_Inspector_SpaceData } from "../../renderer/ui/Inspector/SpaceData";
 import { UIComponent_Timeline_SpaceData } from "../../renderer/ui/Timeline/SpaceData";
+import { SpaceData } from "../../renderer/ui/UI";
 
 type UIComponents = UIComponent_View | UIComponent_Inspector | UIComponent_Project | UIComponent_Timeline | UIComponent_Preview;
 
 export class UIManager extends Manager {
-  private readonly spaces = new Map<new () => object, object>();
+  private readonly spaces = new Map<new () => object, SpaceData>();
 
   public getSpaceData<T extends object>(type: new () => T): T {
     let space = this.spaces.get(type);

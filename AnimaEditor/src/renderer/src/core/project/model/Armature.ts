@@ -2,6 +2,7 @@
 import { ID } from "../../../editor/Editor";
 import { Vec2, Vec2Math } from "../../../util/vecMath";
 import { Model, ModelInput } from "../Model";
+import { AnimationReference, type AnimationReferenceInput } from "./Animation";
 
 
 export interface BoneReferenceInput {
@@ -15,9 +16,9 @@ interface Model_BoneInput {
   parentID?: BoneReferenceInput,
   name?: string,
 };
+
 export interface Model_ArmatureInput extends ModelInput {
-  targetID?: number,
-  path?: string,
+  animation?: AnimationReferenceInput,
   bones?: Record<BoneID, Model_BoneInput>,
 };
 
@@ -51,13 +52,13 @@ export class Model_Armature extends Model {
     return new Bone(data);
   }
 
+  public animation: AnimationReference;
   public bones: Record<BoneID, Bone>;
   constructor(data: Model_ArmatureInput) {
     super(data);
 
-    this.bones = Object.fromEntries(
-      Object.entries(data.bones ?? {}).map(([id, bone]) => [id, new Bone(bone)]),
-    );
+    this.animation = data.animation ? new AnimationReference(data.animation) : new AnimationReference({animationID: "", trackMap: {}});
+    this.bones = Object.fromEntries(Object.entries(data.bones ?? {}).map(([id, bone]) => [id, new Bone(bone)]));
   }
 }
 

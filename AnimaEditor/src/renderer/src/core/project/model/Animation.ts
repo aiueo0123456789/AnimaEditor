@@ -1,5 +1,5 @@
 import { ID } from "../../../editor/Editor";
-import { Model, ModelInput, ModelReference, ModelReferenceInput } from "../Model";
+import { Model, ModelInput } from "../Model";
 
 export enum KeyframeInterpolation {
   LINEAR = 0,
@@ -14,14 +14,26 @@ interface KeyframeInput {
 
 interface TrackInput {
   name?: string
-  path?: string,
   keyframes?: KeyframeInput[],
 }
 
 export interface Model_AnimationInput extends ModelInput {
-  targetID: ModelReferenceInput,
   tracks: Record<ID, TrackInput>,
 };
+
+export interface AnimationReferenceInput {
+  animationID?: ID;
+  trackMap?: Record<string, ID>;
+}
+
+export class AnimationReference {
+  public animationID: ID;
+  public trackMap: Record<string, ID>; // パスからTrackIDを引く
+  constructor(data: AnimationReferenceInput = {}) {
+    this.animationID = data.animationID ?? "";
+    this.trackMap = { ...data.trackMap };
+  }
+}
 
 class Keyframe {
   public id: ID;
@@ -38,11 +50,9 @@ class Keyframe {
 
 class Track {
   public name: string;
-  public path: string;
   public keyframes: Keyframe[];
   constructor(data: TrackInput) {
     this.name = data.name ?? "名称未設定";
-    this.path = data.path ?? "";
     this.keyframes = data.keyframes ? data.keyframes.map((keyframe) => new Keyframe(keyframe)) : [];
   }
 }
@@ -55,15 +65,14 @@ export class Model_Animation extends Model {
     return new Keyframe(data);
   }
 
-  public targetID: ModelReference;
+  static createTrack(data: TrackInput): Track {
+    return new Track(data);
+  }
+
   public tracks: Record<ID, Track>;
   constructor(data: Model_AnimationInput) {
     super(data);
 
-    if (!data.targetID || typeof data.targetID.modelID !== "string") {
-      throw new TypeError("Animation target must be a Model reference");
-    }
-    this.targetID = new ModelReference(data.targetID);
     this.tracks = Object.fromEntries(
       Object.entries(data.tracks ?? {}).map(([id, track]) => [id, new Track(track)]),
     );

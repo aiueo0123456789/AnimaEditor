@@ -3,7 +3,8 @@ import type { AnimaEditor } from "../../../../editor/Editor";
 import { InputManager } from "../../../../manager/InputManager";
 import type { UIComponent_View } from "../View";
 import { simpleWebGPU } from "../../../../util/simpleWebGPU";
-import { editOnce } from "./editOnce";
+import { CommandManager } from "../../../../manager/CommandManager";
+import { commitUIActiveObject } from "../../../../manager/ui/commands";
 
 export class ObjectSelectTool extends Tool {
   private version = 0;
@@ -20,8 +21,8 @@ export class ObjectSelectTool extends Tool {
       if (version !== this.version || editor.project !== project || view.objectIDTexture !== texture) return;
       const id = view.spaceData.renderData.numberIDtoID(objectID);
       const model = id ? project.getModelByID(id) : null;
-      const selectedObjects = [...editor.editorState.selectedObjects];
-      if (model !== editor.editorState.activeObject) editOnce(editor, "Select object", () => [{ model: editor.editorState, path: "activeObject", value: model }, { model: editor.editorState, path: "selectedObjects", value: selectedObjects }]);
+      const commands = editor.getManager(CommandManager);
+      if (commands && model !== editor.editorState.activeObject) commitUIActiveObject(commands, model);
     }).catch(error => { if (version === this.version && texture === view.objectIDTexture) console.error("Object picking failed", error); });
   }
 }

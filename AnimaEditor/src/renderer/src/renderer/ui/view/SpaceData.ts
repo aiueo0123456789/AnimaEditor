@@ -2,6 +2,7 @@ import { Runtime_Armature } from "../../../core/projectCache/runtime/Armature";
 import { Runtime_Sprite } from "../../../core/projectCache/runtime/Sprite";
 import { ID } from "../../../editor/Editor";
 import { simpleWebGPU } from "../../../util/simpleWebGPU";
+import { SpaceData } from "../UI";
 import { View_ArmatureRenderData } from "./renderData/ArmatureRenderData";
 import { View_SpriteRenderData } from "./renderData/SpriteRenderData";
 import { AddArmatureTool } from "./tool/AddArmatureTool";
@@ -18,7 +19,9 @@ import { SelectTool } from "./tool/SelectTool";
 import { Tool } from "./tool/Tool";
 import { TranslateTool } from "./tool/TranslateTool";
 import { WeightPaintTool } from "./tool/WeightPaintTool";
-import { ViewEditModes } from "./ViewEditModes";
+import { InsertKeyframeTool } from "./tool/InsertKeyframeTool";
+import { ViewEditModes } from "../../../editor/editorState/ViewEditModes";
+import type { ViewGeometrySource } from "./ViewGeometry";
 
 export class GizumoRenderData {
   public settingBuffer: GPUBuffer;
@@ -39,7 +42,7 @@ export class GizumoRenderData {
 type ViewRenderDatas = View_SpriteRenderData | View_ArmatureRenderData;
 
 export class UIComponent_View_SpaceData {
-  public editMode: ViewEditModes = ViewEditModes.OBJECT;
+  public showReferenceGeometry = false;
   public currentTool = "objectSelect";
   public tools: Tool[] = [
     new ObjectSelectTool(),
@@ -55,23 +58,32 @@ export class UIComponent_View_SpaceData {
     new DeleteBoneTool(),
     new AddArmatureTool(),
     new WeightPaintTool(),
+    new InsertKeyframeTool(),
   ];
   public modeToToolMap: Record<ViewEditModes, typeof Tool[]> = {
     [ViewEditModes.OBJECT]: [ObjectSelectTool, AddArmatureTool],
     [ViewEditModes.VERTEX]: [SelectTool, TranslateTool, RotationTool, ScaleTool, AddVertexTool, DeleteVertexTool, AddEdgeTool, DeleteEdgeTool],
     [ViewEditModes.WEIGHTPAINT]: [SelectTool, WeightPaintTool],
     [ViewEditModes.BONE]: [SelectTool, TranslateTool, RotationTool, ScaleTool, AddBoneTool, DeleteBoneTool],
-    [ViewEditModes.BONEANIMATION]: [SelectTool, TranslateTool, RotationTool, ScaleTool],
+    [ViewEditModes.BONEANIMATION]: [SelectTool, TranslateTool, RotationTool, ScaleTool, InsertKeyframeTool],
     [ViewEditModes.ERROR]: [],
   };
   public renderData: View_SpaceData_RenderData = new View_SpaceData_RenderData();
 }
 
-// Per-panel GPU resources must not be destroyed by another panel sharing settings.
-export class View_SpaceData_RenderData {
+// Shared views keep both geometry sets alive until the last mounted consumer leaves.
+export class View_SpaceData_RenderData extends SpaceData {
   private IDtoNumber: Map<ID, number> = new Map();
   private renderData: Map<ID, ViewRenderDatas> = new Map();
-  public gizumoRenderData = new GizumoRenderData();
+  private modelRenderData: Map<ID, ViewRenderDatas> = new Map();
+  private consumers = new Set<object>();
+  private gizumo: GizumoRenderData | null = null;
+  public get gizumoRenderData(): GizumoRenderData { return this.gizumo ??= new GizumoRenderData(); }
+
+  public acquire(consumer: object): void { this.consumers.add(consumer); }
+  public release(consumer: object): void {
+    if (this.consumers.delete(consumer) && !this.consumers.size) this.dispose();
+  }
 
   private getFreeNumber(): number {
     const used = new Set(this.IDtoNumber.values());
@@ -86,6 +98,7 @@ export class View_SpaceData_RenderData {
     const numberID = this.getFreeNumber();
     const spriteRenderData = new View_SpriteRenderData(numberID);
     this.renderData.set(sprite.id, spriteRenderData);
+    this.modelRenderData.set(sprite.id, new View_SpriteRenderData(numberID));
     this.IDtoNumber.set(sprite.id, numberID);
     return spriteRenderData;
   }
@@ -94,17 +107,20 @@ export class View_SpaceData_RenderData {
     const numberID = this.getFreeNumber();
     const armatureRenderData = new View_ArmatureRenderData(numberID);
     this.renderData.set(armature.id, armatureRenderData);
+    this.modelRenderData.set(armature.id, new View_ArmatureRenderData(numberID));
     this.IDtoNumber.set(armature.id, numberID);
     return armatureRenderData;
   }
 
-  getRenderData(id: ID): ViewRenderDatas | null {
-    return this.renderData.get(id) ?? null;
+  getRenderData(id: ID, source: ViewGeometrySource = "runtime"): ViewRenderDatas | null {
+    return (source === "model" ? this.modelRenderData : this.renderData).get(id) ?? null;
   }
 
   public retain(ids: ReadonlySet<ID>): void {
     for (const [id, data] of this.renderData) if (!ids.has(id)) {
       data.dispose();
+      this.modelRenderData.get(id)?.dispose();
+      this.modelRenderData.delete(id);
       this.renderData.delete(id);
       this.IDtoNumber.delete(id);
     }
@@ -112,7 +128,8 @@ export class View_SpaceData_RenderData {
 
   public dispose(): void {
     this.retain(new Set());
-    this.gizumoRenderData.settingBuffer.destroy();
+    this.gizumo?.settingBuffer.destroy();
+    this.gizumo = null;
   }
 
   numberIDtoID(numberID: number): ID {

@@ -9,6 +9,7 @@ export interface SelectOption {
 export interface SelectProps extends InputProps<string | null> {
   readonly options: readonly SelectOption[];
   readonly placeholder?: string;
+  readonly searchable?: boolean;
 }
 export type SelectWidget = WidgetDefinition<"select", SelectProps>;
 

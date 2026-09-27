@@ -2,7 +2,7 @@
 import { ID } from "../../../editor/Editor";
 import { Vec2, Vec2Math, Vec3, Vec3Math } from "../../../util/vecMath";
 import { Model_Sprite } from "../../project/model/Sprite";
-import { System_Runtime_ReferencesResolver } from "../../system/runtime/Runtime";
+import { Runtime_AnimationReference, System_Runtime_ReferencesResolver } from "../../system/runtime/Runtime";
 import { Runtime } from "../Runtime";
 import { Runtime_Bone } from "./Armature";
 import { Runtime_Texture } from "./Texture";
@@ -42,6 +42,7 @@ export class Runtime_Sprite extends Runtime<Model_Sprite>  {
   }
 
   public vertices: Vec2[] = [];
+  public animation = new Runtime_AnimationReference(null, {});
   public indices: Vec3[] = [];
   public silhouetteEdges: Runtime_Edge[] = [];
   public edges: Runtime_Edge[] = [];
@@ -78,14 +79,37 @@ export class Runtime_Sprite extends Runtime<Model_Sprite>  {
     return this.edges.length;
   }
 
+  getAnimationTarget(): string[] {
+    return Object.keys(this.model.vertices).flatMap(id => [`vertices.${id}.0`, `vertices.${id}.1`]);
+  }
+
+  getAnimationValue(path: string): number | undefined {
+    const parts = path.split(".");
+    if (parts.length !== 3 || parts[0] !== "vertices" || (parts[2] !== "0" && parts[2] !== "1")) return undefined;
+    const index = this.vertexIDMap.get(parts[1]);
+    return index === undefined ? undefined : this.vertices[index]?.[Number(parts[2])];
+  }
+
+  setAnimation(): void {
+    // Init restores the base mesh each frame, so vertex channels must also apply each frame.
+    for (const [path, track] of Object.entries(this.animation.trackMap)) {
+      if (track?.value === undefined || !Number.isFinite(track.value)) continue;
+      const parts = path.split(".");
+      if (parts.length !== 3 || parts[0] !== "vertices" || (parts[2] !== "0" && parts[2] !== "1")) continue;
+      const index = this.vertexIDMap.get(parts[1]);
+      if (index !== undefined && this.vertices[index]) this.vertices[index][Number(parts[2])] = track.value;
+    }
+  }
+
   resolveReferences(referencesResolver: System_Runtime_ReferencesResolver): void {
+    this.animation = referencesResolver.animation(this.model.animation);
     Object.entries(this.model.boneWeights).forEach(([boneWeightID, modelBoneWeight]) => {
       const runtimeBoneWeightIndex = this.boneWeightIDMap.get(boneWeightID);
       if (typeof runtimeBoneWeightIndex !== "number") return ;
       const runtimeBoneWeight = this.boneWeights[runtimeBoneWeightIndex];
       runtimeBoneWeight.bone = referencesResolver.bone(modelBoneWeight.boneID);
     })
-    const newTexture = referencesResolver.model(this.model.textureID);
+    const newTexture = referencesResolver.model(this.model.texture);
     if (newTexture instanceof Runtime_Texture) this.texture = newTexture;
   }
 }

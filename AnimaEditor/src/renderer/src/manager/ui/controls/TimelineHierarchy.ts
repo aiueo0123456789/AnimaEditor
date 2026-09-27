@@ -1,4 +1,4 @@
-import type { TimelineKind, TimelineTrack } from "../components/Timeline";
+import type { TimelineGroup, TimelineKind, TimelineTrack } from "../components/Timeline";
 
 interface Node {
   id: string;
@@ -17,8 +17,12 @@ export interface TimelineRow {
   track?: TimelineTrack;
 }
 
-export function timelineRows(tracks: readonly TimelineTrack[], collapsed: ReadonlySet<string>): TimelineRow[] {
+export function timelineRows(tracks: readonly TimelineTrack[], collapsed: ReadonlySet<string>, groups: readonly TimelineGroup[] = []): TimelineRow[] {
   const roots = new Map<string, Node>();
+  for (const group of groups) {
+    const id = JSON.stringify(["group", group.id]);
+    roots.set(id, { id, label: group.label, kind: group.kind, children: new Map(), tracks: [] });
+  }
   for (const track of tracks) {
     let children = roots;
     const prefix: string[] = [];

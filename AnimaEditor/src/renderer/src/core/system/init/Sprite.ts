@@ -43,7 +43,7 @@ export class System_Init_Sprite extends System {
       let isChangedVertex = false;
       const modelVertices = Object.entries(model.vertices);
       if (runtime.vertices.length !== modelVertices.length ||
-          modelVertices.some(([vertexID, vertex]) => !runtime.vertexIDMap.has(vertexID))) {
+          modelVertices.some(([vertexID], index) => runtime.vertexIDMap.get(vertexID) !== index)) {
         isChangedVertex = true;
         runtime.vertices.length = 0;
         runtime.texcoords.length = 0;

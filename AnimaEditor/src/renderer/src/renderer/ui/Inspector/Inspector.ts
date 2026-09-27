@@ -7,12 +7,13 @@ import { EditorEvent, EditorEventType } from "../../../manager/EventManager";
 import { UIManager } from "../../../manager/ui/UIManager";
 import type { WidgetHandle } from "../../../manager/ui/WidgetTree";
 import { bind, Button, RenameButton, List, Column, Header, Main, Row, Section, Select, Slider, Text, TextField } from "../../../manager/ui/components";
-import type { Widget } from "../../../manager/ui/components";
-import { commitUIAddValue, commitUIProperty } from "../../../manager/ui/commands";
+import type { SelectOption, Widget } from "../../../manager/ui/components";
+import { commitUIAddValue, commitUIProperties, commitUIProperty } from "../../../manager/ui/commands";
 import { UIComponent } from "../UI";
 import { UIComponent_Inspector_SpaceData } from "./SpaceData";
 import { Model_Animation } from "../../../core/project/model/Animation";
 import { AnimationState } from "../../../editor/editorState/state/States/Animation";
+import { ArmatureState } from "../../../editor/editorState/state/States/Armature";
 
 export class UIComponent_Inspector extends UIComponent {
   private handle: WidgetHandle | null = null;
@@ -40,7 +41,7 @@ export class UIComponent_Inspector extends UIComponent {
       const children: Widget[] = [];
       if (model) {
         const state = editor.editorState.getModelStateByID(model.id);
-        if (model instanceof Model_Sprite || model instanceof Model_Armature) {
+        if (model instanceof Model_Sprite || model instanceof Model_Armature || model instanceof Model_Animation) {
           children.push(TextField({
             label: "名前",
             observeEvents: [createChangeEvent(model, "name")],
@@ -49,6 +50,50 @@ export class UIComponent_Inspector extends UIComponent {
             onCommit: value => { if (model.name !== value) commitUIProperty(commands, model, "name", value); },
           }));
           children.push(Slider({ label: "透明度", value: 1, min: 0, max: 1, disabled: true, onChange: () => {} }));
+        }
+        if (model instanceof Model_Sprite || model instanceof Model_Armature) {
+          const animationBinding = (): Widget => {
+            const animation = editor.project.getModelByID(model.animation.animationID);
+            const animations = editor.project.getModelsByType(Model_Animation);
+            const paths: SelectOption[] = model instanceof Model_Armature
+              ? Object.entries(model.bones).flatMap(([id, bone]) => [
+                  ["position.0", "座標X"], ["position.1", "座標Y"], ["rotation", "回転"], ["scale.0", "大きさX"], ["scale.1", "大きさY"],
+                ].map(([property, label]) => ({ value: `bones.${id}.animation.${property}`, label: `${bone.name} / ${label}` })))
+              : Object.keys(model.vertices).flatMap(id => [0, 1].map(axis => ({ value: `vertices.${id}.${axis}`, label: `${id} / ${axis === 0 ? "X" : "Y"}` })));
+            return Section({ title: "アニメーション", rebuild: animationBinding,
+              observeEvents: [
+                createChangeEvent(model, "animation"),
+                createChangeEvent(model, model instanceof Model_Armature ? "bones" : "vertices"),
+                new EditorEvent(EditorEventType.add, model, model instanceof Model_Armature ? "bones" : "vertices"),
+                new EditorEvent(EditorEventType.delete, model, model instanceof Model_Armature ? "bones" : "vertices"),
+                createChangeEvent(editor.project, "models"),
+                new EditorEvent(EditorEventType.add, editor.project, "models"), new EditorEvent(EditorEventType.delete, editor.project, "models"),
+                ...animations.map(item => createChangeEvent(item, "name")),
+                ...(animation instanceof Model_Animation ? [createChangeEvent(animation, "tracks"), new EditorEvent(EditorEventType.add, animation, "tracks"), new EditorEvent(EditorEventType.delete, animation, "tracks")] : []),
+              ],
+              children: [
+                Select({ label: "Animation", value: model.animation.animationID, searchable: true,
+                  options: [{ value: "", label: "未割り当て" }, ...animations.map(item => ({ value: item.id, label: item.name }))],
+                  onChange: value => {
+                    if (value === null || value === model.animation.animationID) return;
+                    commitUIProperties(commands, "Assign animation", [
+                      { model, path: "animation.animationID", value }, { model, path: "animation.trackMap", value: {} },
+                    ]);
+                  } }),
+                ...(animation instanceof Model_Animation ? [List({ label: "トラック割り当て", children: paths.map(option => Select({
+                  label: option.label, searchable: true, value: model.animation.trackMap[option.value] ?? "",
+                  options: [{ value: "", label: "未割り当て" }, ...Object.entries(animation.tracks).map(([id, track]) => ({ value: id, label: track.name }))],
+                  onChange: value => {
+                    if (value === null) return;
+                    const trackMap = { ...model.animation.trackMap };
+                    if (value) trackMap[option.value] = value; else delete trackMap[option.value];
+                    commitUIProperty(commands, model, "animation.trackMap", trackMap);
+                  },
+                })) })] : []),
+              ],
+            });
+          };
+          children.push(animationBinding());
         }
         if (model instanceof Model_Sprite) {
           const texture = (): Widget => Select({
@@ -62,8 +107,8 @@ export class UIComponent_Inspector extends UIComponent {
             ],
             rebuild: texture,
             options: editor.project.getModelsByType(Model_Texture).map(item => ({ value: item.id, label: item.name })),
-            value: bind({ read: () => model.textureID.modelID, observeEvents: [createChangeEvent(model, "textureID.modelID")] }),
-            onChange: value => { if (value !== null) commitUIProperty(commands, model, "textureID.modelID", value); },
+            value: bind({ read: () => model.texture.modelID, observeEvents: [createChangeEvent(model, "texture.modelID")] }),
+            onChange: value => { if (value !== null) commitUIProperty(commands, model, "texture.modelID", value); },
           });
           const weights = (): Widget => {
             return Section({
@@ -123,6 +168,57 @@ export class UIComponent_Inspector extends UIComponent {
           });
           children.push(texture(), weights(), boneTarget());
         }
+        if (model instanceof Model_Armature && state instanceof ArmatureState) {
+          const bones = (): Widget => List({
+            label: "ボーン",
+            observeEvents: [
+              new EditorEvent(EditorEventType.add, model, "tracks"),
+              new EditorEvent(EditorEventType.delete, model, "tracks"),
+            ],
+            rebuild: bones,
+            children: Object.entries(model.bones).map(([boneID, bone]) => {
+              return RenameButton({
+                key: boneID,
+                label: bind({ read: () => bone.name, observeEvents: [createChangeEvent(model, `bones.${boneID}.name`)] }),
+                // pressed: bind({
+                //   observeEvents: [createChangeEvent(state, "activeTrackID")],
+                //   read: () => state !== null && "activeTrackID" in state && state.activeTrackID === boneID,
+                // }),
+                onPress: () => {
+                  // if (state && "activeTrackID" in state && state.activeTrackID !== boneID) commitUIProperty(commands, state, "activeTrackID", boneID);
+                },
+                onRename: name => {
+                  if (model.bones[boneID]?.name !== name) commitUIProperty(commands, model, `bones.${boneID}.name`, name);
+                },
+              });
+            })
+          });
+          // const activeTrack = (): Widget => Section({
+          //   title: "トラック",
+          //   observeEvents: [
+          //     createChangeEvent(state, "activeTrackID"),
+          //     new EditorEvent(EditorEventType.delete, model, "tracks"),
+          //   ],
+          //   rebuild: activeTrack,
+          //   children: [
+          //     TextField({
+          //       label: "名前",
+          //       observeEvents: state.activeTrackID ? [createChangeEvent(model, `tracks.${state.activeTrackID}.name`)] : [],
+          //       value: bind({ read: () => state.activeTrackID ? model.tracks[state.activeTrackID].name : "未選択" }),
+          //       onChange: () => {},
+          //       onCommit: value => { if (model.tracks[state.activeTrackID].name !== value) commitUIProperty(commands, model, `tracks.${state.activeTrackID}.name`, value); },
+          //     }),
+          //     TextField({
+          //       label: "対象",
+          //       observeEvents: state.activeTrackID ? [createChangeEvent(model, `tracks.${state.activeTrackID}.path`)] : [],
+          //       value: bind({ read: () => state.activeTrackID ? model.tracks[state.activeTrackID].path : "" }),
+          //       onChange: () => {},
+          //       onCommit: value => { if (model.tracks[state.activeTrackID].path !== value) commitUIProperty(commands, model, `tracks.${state.activeTrackID}.path`, value); },
+          //     })
+          //   ]
+          // });
+          children.push(bones());
+        }
         if (model instanceof Model_Animation && state instanceof AnimationState) {
           const tracks = (): Widget => List({
             label: "トラック",
@@ -148,7 +244,34 @@ export class UIComponent_Inspector extends UIComponent {
               });
             })
           });
-          children.push(tracks());
+          const tracksAction = (): Widget => Row({
+            children: [
+              Button({ label: "追加", onPress: () => {
+                commitUIAddValue(commands, model, "tracks", crypto.randomUUID(), Model_Animation.createTrack({
+                  name: "名称未設定",
+                }));
+              }}),
+              Button({ label: "削除", disabled: true, onPress: () => {} }),
+            ]});
+          const activeTrack = (): Widget => Section({
+            title: "トラック",
+            observeEvents: [
+              createChangeEvent(state, "activeTrackID"),
+              new EditorEvent(EditorEventType.delete, model, "tracks"),
+            ],
+            rebuild: activeTrack,
+            children: [
+              TextField({
+                label: "名前",
+                observeEvents: state.activeTrackID ? [createChangeEvent(model, `tracks.${state.activeTrackID}.name`)] : [],
+                value: bind({ read: () => model.tracks[state.activeTrackID]?.name ?? "未選択" }),
+                disabled: !model.tracks[state.activeTrackID],
+                onChange: () => {},
+                onCommit: value => { if (model.tracks[state.activeTrackID] && model.tracks[state.activeTrackID].name !== value) commitUIProperty(commands, model, `tracks.${state.activeTrackID}.name`, value); },
+              }),
+            ]
+          });
+          children.push(tracks(), tracksAction(), activeTrack());
         }
       }
       return Column({

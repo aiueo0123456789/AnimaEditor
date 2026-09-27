@@ -44,15 +44,15 @@
   align-items: center; gap: 8px; min-height: 30px; max-width: 100%;
 }
 [data-widget] > label > span, label[data-widget] > span { color: var(--text-tertiary); overflow-wrap: anywhere; }
-[data-widget] input:not([type="checkbox"]):not([type="range"]),
+[data-widget] input:not([type="checkbox"]):not([type="range"]), .ui-select-search input,
 [data-widget="button"], .ui-select-trigger {
   appearance: none; min-width: 0; max-width: 100%; min-height: 28px;
   border: 1px solid var(--border-muted, #414141); border-radius: var(--ui-radius, 4px);
   background: var(--bg-recessed, #181818); color: var(--text-primary);
   padding: 4px 8px; font: inherit; letter-spacing: 0;
 }
-[data-widget] input:not([type="checkbox"]):not([type="range"]) { width: 100%; user-select: text; }
-[data-widget] input::placeholder { color: var(--text-muted); }
+[data-widget] input:not([type="checkbox"]):not([type="range"]), .ui-select-search input { width: 100%; user-select: text; }
+[data-widget] input::placeholder, .ui-select-search input::placeholder { color: var(--text-muted); }
 [data-widget="button"] { background: var(--bg-panel, #343434); cursor: pointer; overflow-wrap: anywhere; }
 [data-widget="button"]:hover:not(:disabled), .ui-select-trigger:hover:not(:disabled) { border-color: var(--border-hover, #6d6d6d); background: var(--overlay-2); }
 [data-widget="button"][aria-pressed="true"] { background: var(--accent-selection); border-color: var(--ui-focus); }
@@ -69,7 +69,7 @@
 .ui-list-resizer:hover, .ui-list-resizer:focus-visible, .ui-list.is-resizing > .ui-list-resizer { background: var(--ui-focus, #77b6ea); }
 .ui-list.is-resizing { user-select: none; }
 [data-widget] :disabled, [data-widget]:disabled { opacity: .45; cursor: not-allowed; }
-[data-widget]:focus-visible, [data-widget] :focus-visible {
+[data-widget]:focus-visible, [data-widget] :focus-visible, .ui-select-search input:focus-visible {
   outline: 2px solid var(--ui-focus); outline-offset: -2px; box-shadow: none;
 }
 [data-widget] input[type="checkbox"] { appearance: none; width: 16px; height: 16px; margin: 0; border: 1px solid var(--border-default); border-radius: 3px; background: var(--bg-recessed); }
@@ -83,6 +83,9 @@
 .ui-chevron { flex: 0 0 6px; height: 6px; border: solid currentColor; border-width: 0 1px 1px 0; transform: rotate(45deg); margin: -3px 2px 0; }
 .ui-select-trigger[aria-expanded="true"] { border-color: var(--ui-focus); }
 .ui-select-popup { position: fixed; z-index: 10000; overflow: auto; overscroll-behavior: contain; padding: 4px; background: var(--bg-panel, #343434); border: 1px solid var(--border-default, #5d5d5d); border-radius: 4px; box-shadow: 0 8px 24px #0008; }
+.ui-select-menu { display: flex; flex-direction: column; overflow: hidden; }
+.ui-select-search { flex: 0 0 auto; padding-bottom: 4px; }
+.ui-select-options { min-height: 0; overflow: auto; overscroll-behavior: contain; }
 .ui-select-option { position: relative; min-height: 28px; padding: 5px 24px 5px 8px; border-radius: 2px; cursor: pointer; overflow-wrap: anywhere; }
 .ui-select-option.is-active { background: var(--overlay-4); outline: 1px solid var(--ui-focus); outline-offset: -1px; }
 .ui-select-option[aria-selected="true"] { color: var(--text-bright); background: var(--accent-selection); }

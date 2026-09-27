@@ -8,6 +8,10 @@ import { CommandManager } from "../../manager/CommandManager";
 import { SourceContext } from "../../manager/context/contexts/SourceContext";
 import { Tool } from "./view/tool/Tool";
 
+export abstract class SpaceData {
+  constructor() {}
+}
+
 export class ToolRender {
   public id: string;
   public icon: string;

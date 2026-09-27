@@ -189,9 +189,10 @@ export function createTimelineControl(props: TimelineProps) {
       }
     }, { signal: trackSignal });
     grid.append(ruler);
-    const tracks = data.tracks.filter(track => visible.has(track.kind));
+    const tracks = data.tracks.filter(track => (track.kinds ?? [track.kind]).some(kind => visible.has(kind)));
+    const groups = data.groups?.filter(group => (group.kinds ?? [group.kind]).some(kind => visible.has(kind)));
     const collapsed = new Set(state.collapsedPaths ?? []);
-    const rows = timelineRows(tracks, collapsed);
+    const rows = timelineRows(tracks, collapsed, groups);
     const rowElements = new Map<string, HTMLElement>();
     for (const row of rows) {
       const track = row.track;
@@ -270,7 +271,7 @@ export function createTimelineControl(props: TimelineProps) {
       if (focusedRow) focused.focus({ preventScroll: true });
     }
     labels.scrollTop = scroll.scrollTop;
-    if (!tracks.length) {
+    if (!rows.length) {
       const empty = document.createElement("div");
       empty.className = "ui-timeline-empty";
       empty.textContent = "表示するアニメーションがありません";
@@ -326,7 +327,7 @@ export function createTimelineControl(props: TimelineProps) {
       for (const [kind, input] of checkboxes) input.checked = visible.has(kind);
       zoom = Math.max(2, Math.min(64, state.zoom));
       split.setRatio(state.trackRatio);
-      const next = JSON.stringify([value.frameStart, value.frameEnd, value.tracks, [...visible], zoom, state.collapsedPaths]);
+      const next = JSON.stringify([value.frameStart, value.frameEnd, value.tracks, value.groups, [...visible], zoom, state.collapsedPaths]);
       if (next !== signature) { signature = next; drawTracks(); }
       else updateFrame();
     },

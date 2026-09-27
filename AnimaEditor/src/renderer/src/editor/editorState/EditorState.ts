@@ -8,10 +8,12 @@ import { AnimationState } from "./state/States/Animation";
 import { ArmatureState } from "./state/States/Armature";
 import { SpriteState } from "./state/States/Sprite";
 import { TextureState } from "./state/States/Texture";
+import { ViewEditModes } from "./ViewEditModes";
 
 export type States = SpriteState | ArmatureState | AnimationState | TextureState;
 
 export class EditorState {
+  public editMode = ViewEditModes.OBJECT;
   public activeObject: Models | null;
   public hoverObject: Models | null;
   public selectedObjects: Models[];
@@ -25,14 +27,6 @@ export class EditorState {
     this.selectedObjects = [];
 
     this.states = [];
-  }
-
-  public setActiveObject(activeObject: Models | null): void {
-    this.activeObject = activeObject;
-  }
-
-  public setHoverObject(hoverObject: Models | null): void {
-    this.hoverObject = hoverObject;
   }
 
   public addTexture(model: Model_Texture): TextureState {
@@ -55,12 +49,5 @@ export class EditorState {
       }
     }
     return null;
-  }
-
-  public clear(): void {
-    this.activeObject = null;
-    this.hoverObject = null;
-    this.selectedObjects.length = 0;
-    this.states.length = 0;
   }
 }

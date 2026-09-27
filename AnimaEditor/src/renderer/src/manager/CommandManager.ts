@@ -13,6 +13,7 @@ import type { InsertElementCommandUpdate } from "../editor/command/primitiveComm
 import type { RemoveItemCommandUpdate } from "../editor/command/primitiveCommand/RemoveItem";
 import type { RemoveItemsCommandUpdate } from "../editor/command/primitiveCommand/RemoveItems";
 import type { SetActiveObjectCommandUpdate } from "../editor/command/interactionCommand/SetActiveObjectCommand";
+import type { SetEditModeCommandUpdate } from "../editor/command/interactionCommand/SetEditModeCommand";
 import type { SetProjectCommandUpdate } from "../editor/command/interactionCommand/SetProjectCommand";
 import type { BoneExtrudeCommandUpdate } from "../editor/command/interactionCommand/BoneExtrudeCommand";
 import type { AddBoneWeightPaintCommandUpdate } from "../editor/command/interactionCommand/AddWeightPaintCommand";
@@ -29,7 +30,7 @@ export type CommandUpdates = ClearCommandUpdate | PushElementCommandUpdate | Ins
   RemoveItemCommandUpdate | RemoveItemsCommandUpdate | ConcatArrayCommandUpdate | SetPropertyCommandUpdate |
   SetVec2CommandUpdate | TranslateCommandUpdate | SetActiveObjectCommandUpdate | SetProjectCommandUpdate |
   BoneExtrudeCommandUpdate | AddBoneWeightPaintCommandUpdate | TransformCommandUpdate | SetPropertiesUpdate |
-  AddValueCommandUpdate | RemoveValueCommandUpdate | AddDictionaryValuesCommandUpdate;
+  AddValueCommandUpdate | RemoveValueCommandUpdate | AddDictionaryValuesCommandUpdate | SetEditModeCommandUpdate;
 
 function isSubclassOf(child: Function, parent: Function): boolean {
   return child.prototype instanceof parent || child === parent;

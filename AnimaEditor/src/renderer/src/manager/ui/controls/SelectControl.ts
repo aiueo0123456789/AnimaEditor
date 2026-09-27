@@ -5,6 +5,7 @@ let nextId = 0;
 export function createSelectControl(props: SelectProps) {
   const controller = new AbortController();
   const signal = controller.signal;
+  const searchable = props.searchable ?? false;
   const button = document.createElement("button");
   button.type = "button";
   button.className = "ui-select-trigger";
@@ -18,11 +19,23 @@ export function createSelectControl(props: SelectProps) {
   arrow.setAttribute("aria-hidden", "true");
   button.append(caption, arrow);
   const popup = document.createElement("div");
-  popup.className = "ui-select-popup";
-  popup.id = `ui-select-${nextId++}`;
-  popup.setAttribute("role", "listbox");
-  popup.setAttribute("aria-label", props.label);
-  button.setAttribute("aria-controls", popup.id);
+  popup.className = "ui-select-popup ui-select-menu";
+  const listbox = document.createElement("div");
+  listbox.className = "ui-select-options";
+  listbox.id = `ui-select-${nextId++}`;
+  listbox.setAttribute("role", "listbox");
+  listbox.setAttribute("aria-label", props.label);
+  button.setAttribute("aria-controls", listbox.id);
+  const searchContainer = document.createElement("div");
+  searchContainer.className = "ui-select-search";
+  const search = document.createElement("input");
+  search.type = "search";
+  search.placeholder = "検索...";
+  search.setAttribute("aria-label", `${props.label}を検索`);
+  search.setAttribute("autocomplete", "off");
+  searchContainer.append(search);
+  if (searchable) popup.append(searchContainer);
+  popup.append(listbox);
   let opened = false;
   let current: string | null = null;
   let active = -1;
@@ -30,7 +43,7 @@ export function createSelectControl(props: SelectProps) {
   let lastType = 0;
   const options = props.options.map((option, index) => {
     const node = document.createElement("div");
-    node.id = `${popup.id}-${index}`;
+    node.id = `${listbox.id}-${index}`;
     node.className = "ui-select-option";
     node.setAttribute("role", "option");
     node.setAttribute("aria-disabled", String(option.disabled ?? false));
@@ -38,16 +51,32 @@ export function createSelectControl(props: SelectProps) {
     node.title = option.label;
     node.addEventListener("pointermove", () => { if (!option.disabled) highlight(index); }, { signal });
     node.addEventListener("click", () => choose(index), { signal });
-    popup.append(node);
+    listbox.append(node);
     return node;
   });
-  if (!options.length) {
-    const empty = document.createElement("div");
-    empty.className = "ui-select-empty";
-    empty.textContent = "候補なし";
-    popup.append(empty);
+  const empty = document.createElement("div");
+  empty.className = "ui-select-empty";
+  empty.textContent = props.options.length ? "一致する候補なし" : "候補なし";
+  empty.hidden = options.length > 0;
+  listbox.append(empty);
+
+  const visibleEnabled = (): number[] => props.options
+    .map((_, index) => index)
+    .filter(index => !options[index].hidden && !props.options[index].disabled);
+
+  function filter(query: string): void {
+    const normalized = query.trim().toLocaleLowerCase();
+    let visible = 0;
+    props.options.forEach((option, index) => {
+      const matches = !normalized || option.label.toLocaleLowerCase().includes(normalized);
+      options[index].hidden = !matches;
+      if (matches) visible++;
+    });
+    empty.hidden = visible > 0;
+    const enabled = visibleEnabled();
+    if (!enabled.includes(active)) highlight(enabled[0] ?? -1);
+    position();
   }
-  const enabled = props.options.map((_, index) => index).filter(index => !props.options[index].disabled);
 
   function highlight(index: number): void {
     active = index;
@@ -76,15 +105,20 @@ export function createSelectControl(props: SelectProps) {
     button.setAttribute("aria-expanded", "false");
     button.removeAttribute("aria-activedescendant");
     typed = "";
+    search.value = "";
+    filter("");
   }
   function open(): void {
     if (button.disabled || opened) return;
     opened = true;
     document.body.append(popup);
     button.setAttribute("aria-expanded", "true");
-    position();
+    filter("");
     const selected = props.options.findIndex(option => option.value === current && !option.disabled);
+    const enabled = visibleEnabled();
     highlight(selected >= 0 ? selected : enabled[0] ?? -1);
+    if (searchable) search.focus();
+    position();
   }
   function setValue(value: string | null): void {
     current = value;
@@ -113,6 +147,7 @@ export function createSelectControl(props: SelectProps) {
       event.stopPropagation();
       const wasOpen = opened;
       open();
+      const enabled = visibleEnabled();
       if (event.key === "Enter" || event.key === " ") { if (wasOpen) choose(active); }
       else if (event.key === "Home") highlight(enabled[0] ?? -1);
       else if (event.key === "End") highlight(enabled.at(-1) ?? -1);
@@ -126,15 +161,40 @@ export function createSelectControl(props: SelectProps) {
       const now = Date.now();
       typed = now - lastType > 700 ? event.key : typed + event.key;
       lastType = now;
-      const match = enabled.find(index => props.options[index].label.toLocaleLowerCase().startsWith(typed.toLocaleLowerCase()));
+      const match = visibleEnabled().find(index => props.options[index].label.toLocaleLowerCase().startsWith(typed.toLocaleLowerCase()));
       if (match !== undefined) highlight(match);
     }
   }, { signal });
-  popup.addEventListener("pointerdown", event => event.preventDefault(), { signal });
+  search.addEventListener("input", () => filter(search.value), { signal });
+  search.addEventListener("keydown", event => {
+    if (event.key === "Tab") { close(); return; }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+      button.focus();
+      return;
+    }
+    if (!["ArrowDown", "ArrowUp", "Home", "End", "Enter"].includes(event.key)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const enabled = visibleEnabled();
+    if (event.key === "Enter") choose(active);
+    else if (event.key === "Home") highlight(enabled[0] ?? -1);
+    else if (event.key === "End") highlight(enabled.at(-1) ?? -1);
+    else if (enabled.length) {
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      const currentIndex = enabled.indexOf(active);
+      highlight(enabled[(currentIndex + step + enabled.length) % enabled.length]);
+    }
+  }, { signal });
+  popup.addEventListener("pointerdown", event => { if (event.target !== search) event.preventDefault(); }, { signal });
   document.addEventListener("pointerdown", event => {
     if (!button.contains(event.target as Node) && !popup.contains(event.target as Node)) close();
   }, { signal });
-  document.addEventListener("focusin", event => { if (!button.contains(event.target as Node)) close(); }, { signal });
+  document.addEventListener("focusin", event => {
+    if (!button.contains(event.target as Node) && !popup.contains(event.target as Node)) close();
+  }, { signal });
   window.addEventListener("resize", close, { signal });
   document.addEventListener("scroll", event => { if (!popup.contains(event.target as Node)) close(); }, { signal, capture: true });
   return {

@@ -3,15 +3,23 @@ import type { WidgetDefinition, WidgetProps } from "./Widget";
 import type { Value } from "./Binding";
 
 export type TimelineKind = "armature" | "sprite" | "other";
+export interface TimelineGroup {
+  readonly id: string;
+  readonly label: string;
+  readonly kind: TimelineKind;
+  readonly kinds?: readonly TimelineKind[];
+}
 export interface TimelineTrack {
   readonly id: string;
   readonly label: string;
   readonly kind: TimelineKind;
+  readonly kinds?: readonly TimelineKind[];
   readonly path?: string;
   readonly group?: { readonly id: string; readonly label: string };
   readonly keyframes: readonly { id: string; frame: number; selected: boolean }[];
 }
 export interface TimelineData {
+  readonly groups?: readonly TimelineGroup[];
   readonly frameStart: number;
   readonly frameEnd: number;
   readonly currentFrame: number;

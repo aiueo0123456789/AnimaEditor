@@ -2,8 +2,6 @@ import { Runtime } from "../Runtime";
 import { KeyframeInterpolation, Model_Animation } from "../../project/model/Animation";
 import { ID } from "../../../editor/Editor";
 import { System_Runtime_ReferencesResolver } from "../../system/runtime/Runtime";
-import { ModelReference } from "../../project/Model";
-
 
 class Keyframe {
   public id: ID;
@@ -19,9 +17,9 @@ class Keyframe {
 }
 
 class Track {
-  public path: string = "";
   public keyframes: Keyframe[] = [];
   public keyframeIDMap: Map<ID, number> = new Map();
+  public value: number | undefined;
   constructor() {}
 }
 
@@ -37,7 +35,6 @@ export class Runtime_Animation extends Runtime<Model_Animation> {
     return new Track();
   }
 
-  public target: object | null = null;
   public tracks: Track[] = [];
   public trackIDMap: Map<ID, number> = new Map();
 
@@ -46,10 +43,7 @@ export class Runtime_Animation extends Runtime<Model_Animation> {
     this.model = model;
   }
 
-  resolveReferences(referencesResolver: System_Runtime_ReferencesResolver): void {
-    if (this.model.targetID instanceof ModelReference) this.target = referencesResolver.model(this.model.targetID);
-    else this.target = null;
-  }
+  resolveReferences(_referencesResolver: System_Runtime_ReferencesResolver): void {}
 }
 
 export namespace Runtime_Animation {

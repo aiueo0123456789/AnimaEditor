@@ -1,5 +1,5 @@
 import { Model } from "../../../core/project/Model";
-import { ViewEditModes } from "../../../renderer/ui/view/ViewEditModes";
+import { ViewEditModes } from "../ViewEditModes";
 import { ID } from "../../Editor";
 
 export class State<M extends Model> {

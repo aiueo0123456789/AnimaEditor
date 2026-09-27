@@ -3,6 +3,7 @@ import { ID } from "../../../editor/Editor";
 import { Vec2, Vec2Math } from "../../../util/vecMath";
 import { Model, ModelInput, ModelReference, ModelReferenceInput } from "../Model";
 import { BoneReference, BoneReferenceInput } from "./Armature";
+import { AnimationReference, type AnimationReferenceInput } from "./Animation";
 
 interface BBox {
   min: Vec2,
@@ -39,7 +40,8 @@ interface EdgeInput {
 }
 
 export interface Model_SpriteInput extends ModelInput {
-  textureID: ModelReferenceInput,
+  animation?: AnimationReferenceInput;
+  texture: ModelReferenceInput,
   textureRect?: BBox,
   vertices?: Record<VertexID, VertexInput>,
   silhouetteEdges?: Record<EdgeID, EdgeInput>,
@@ -75,7 +77,8 @@ export class Model_Sprite extends Model {
     return new Edge(data);
   }
 
-  public textureID: ModelReference;
+  public texture: ModelReference;
+  public animation: AnimationReference;
   public textureRect: BBox;
   public vertices: Record<VertexID, Vertex>;
   public silhouetteEdges: Record<EdgeID, Edge>;
@@ -86,8 +89,9 @@ export class Model_Sprite extends Model {
 
   constructor(data: Model_SpriteInput) {
     super(data);
+    this.animation = new AnimationReference(data.animation);
 
-    this.textureID = new ModelReference(data.textureID);
+    this.texture = new ModelReference(data.texture);
 
     this.textureRect = data.textureRect ?? {
       min: Vec2Math.create(),

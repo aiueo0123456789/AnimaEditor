@@ -42,6 +42,10 @@ export class DeleteVertexTool extends Tool {
     }
     recorder.setCommand(SetPropertiesCommand, { edits: [
         ...weightEdits,
+        { model, path: "animation.trackMap", value: Object.fromEntries(Object.entries(model.animation.trackMap).filter(([path]) => {
+          const parts = path.split(".");
+          return parts[0] !== "vertices" || !ids.includes(parts[1]);
+        })) },
         { model: state, path: "selectedVertexIDs", value: [] },
         { model: state, path: "activeVertexID", value: "" },
       ] });

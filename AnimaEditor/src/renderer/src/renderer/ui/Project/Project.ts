@@ -9,7 +9,7 @@ import { UIManager } from "../../../manager/ui/UIManager";
 import type { WidgetHandle } from "../../../manager/ui/WidgetTree";
 import { bind, Button, Column, Row, Header, Main, Hierarchy, Text, TextField } from "../../../manager/ui/components";
 import type { Widget } from "../../../manager/ui/components";
-import { commitUIProperty } from "../../../manager/ui/commands";
+import { commitUIActiveObject, commitUIProperty } from "../../../manager/ui/commands";
 import { UIComponent } from "../UI";
 import { UIComponent_Project_SpaceData } from "./SpaceData";
 
@@ -84,7 +84,7 @@ export class UIComponent_Project extends UIComponent {
             }),
             onSelect: id => {
               const model = groups.flatMap(group => [...group.models]).find(model => model.id === id);
-              if (model) commitUIProperty(commands, editor.editorState, "activeObject", model);
+              if (model && model !== editor.editorState.activeObject) commitUIActiveObject(commands, model);
             },
             onRename: (id, name) => {
               const model = groups.flatMap(group => [...group.models]).find(model => model.id === id);

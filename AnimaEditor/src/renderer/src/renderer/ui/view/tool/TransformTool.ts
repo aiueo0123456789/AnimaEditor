@@ -11,18 +11,13 @@ import type { InputManager } from "../../../../manager/InputManager";
 import type { UIComponent_View } from "../View";
 import { Vec2Math, type Vec2 } from "../../../../util/vecMath";
 import { DragTool } from "./DragTool";
-import { ViewEditModes } from "../ViewEditModes";
+import { ViewEditModes } from "../../../../editor/editorState/ViewEditModes";
 import { Runtime_Armature } from "../../../../core/projectCache/runtime/Armature";
+import { BonePoseTransformCommand } from "../../../../editor/command/interactionCommand/BonePoseTransformCommand";
+import { bonePoints } from "../ViewGeometry";
 
-function elementTarget(model: Model_Sprite | Model_Armature | Runtime_Armature, collection: "vertices" | "bones", id: string, property: string): TranslateTarget {
-  if (!(model instanceof Runtime_Armature)) return { model, path: `${collection}.${id}.${property}` };
-  const resolvePath = (): string => {
-    const items = model.bones;
-    const index = items.findIndex(item => item.id === id);
-    if (index < 0) throw new Error(`Transform target no longer exists: ${id}`);
-    return `${collection}.${index}.${property}`;
-  };
-  return { model, path: resolvePath(), resolvePath };
+function elementTarget(model: Model_Sprite | Model_Armature, collection: "vertices" | "bones", id: string, property: string): TranslateTarget {
+  return { model, path: `${collection}.${id}.${property}` };
 }
 
 export class TransformTool extends DragTool {
@@ -31,25 +26,28 @@ export class TransformTool extends DragTool {
   private lastAngle = 0;
   constructor(private readonly mode: "translate" | "rotate" | "scale") { super(); }
   protected start(editor: AnimaEditor, _view: UIComponent_View, recorder: CommandRecorder): void {
-    const editMode = _view.spaceData.editMode;
+    const editMode = editor.editorState.editMode;
     const model = editor.editorState.activeObject;
     if (!model) return;
     const state = editor.editorState.getModelStateByID(model.id);
-    const runtime = editor.projectCache.getRuntimesByID(model.id);
+    const runtime = editor.projectCache.getRuntimeByID(model.id);
     const targets: TranslateTarget[] = [];
+    if (editMode === ViewEditModes.BONEANIMATION && model instanceof Model_Armature && state instanceof ArmatureState && runtime instanceof Runtime_Armature) {
+      const bones = bonePoints(model, runtime, "runtime").filter(bone => state.selectedBoneIDs.includes(bone.id));
+      if (!bones.length) return;
+      this.pivot = bones.reduce<Vec2>((sum, bone) => Vec2Math.add(sum, bone.head), [0, 0]);
+      this.pivot = [this.pivot[0] / bones.length, this.pivot[1] / bones.length];
+      this.angle = 0;
+      this.lastAngle = Math.atan2(this.origin[1] - this.pivot[1], this.origin[0] - this.pivot[0]);
+      recorder.setCommand(BonePoseTransformCommand, { runtime, ids: bones.map(bone => bone.id), pivot: this.pivot });
+      return;
+    }
     if (editMode === ViewEditModes.VERTEX && model instanceof Model_Sprite && state instanceof SpriteState) {
       for (const vertexID of Object.keys(model.vertices)) if (state.selectedVertexIDs.includes(vertexID)) targets.push(elementTarget(model, "vertices", vertexID, "co"));
-    } else if (model instanceof Model_Armature && state instanceof ArmatureState && runtime instanceof Runtime_Armature) {
+    } else if (model instanceof Model_Armature && state instanceof ArmatureState) {
       if (editMode === ViewEditModes.BONE) {
         for (const [ids, part] of [[state.selectedHeadIDs, "head"], [state.selectedTailIDs, "tail"]] as const) {
           for (const boneID of Object.keys(model.bones)) if (ids.includes(boneID) || state.selectedBoneIDs.includes(boneID)) targets.push(elementTarget(model, "bones", boneID, part));
-        }
-      } else if (editMode === ViewEditModes.BONEANIMATION) {
-        for (const boneID of Object.keys(model.bones)) {
-          if (state.selectedBoneIDs.includes(boneID)) {
-            if (runtime.boneIDMap.has(boneID))
-              targets.push(elementTarget(runtime, "bones", boneID, "animation.position"));
-          }
         }
       }
     }

@@ -4,7 +4,6 @@ import { InputManager } from "../../../../manager/InputManager";
 import { Tool } from "./Tool";
 import { Model_Armature, BoneReference } from "../../../../core/project/model/Armature";
 import { Model_Sprite } from "../../../../core/project/model/Sprite";
-import { Model_Animation } from "../../../../core/project/model/Animation";
 import { ArmatureState } from "../../../../editor/editorState/state/States/Armature";
 import type { PropertyEdit } from "../../../../editor/command/interactionCommand/SetPropertiesCommand";
 import { SetPropertiesCommand } from "../../../../editor/command/interactionCommand/SetPropertiesCommand";
@@ -29,14 +28,10 @@ export class DeleteBoneTool extends Tool {
         if (weight.boneID.aramatureID === model.id && ids.has(weight.boneID.boneID))
           edits.push({ model: sprite, path: `boneWeights.${boneWeightID}.boneID`, value: new BoneReference({ aramatureID: "", boneID: "" }) });
     });
-    for (const animation of editor.project.getModelsByType(Model_Animation)) {
-      if (animation.targetID.modelID !== model.id) continue;
-      for (const [trackID, track] of Object.entries(animation.tracks)) {
-        const parts = track.path.split(track.path.includes("/") ? "/" : ".");
-        if (parts[0] === "bones" && ids.has(parts[1]))
-          edits.push({ model: animation, path: `tracks.${trackID}.path`, value: "" });
-      }
-    }
+    edits.push({ model, path: "animation.trackMap", value: Object.fromEntries(Object.entries(model.animation.trackMap).filter(([path]) => {
+      const parts = path.split(".");
+      return parts[0] !== "bones" || !ids.has(parts[1]);
+    })) });
     edits.push(
         ...["selectedHeadIDs", "selectedTailIDs"].map(path => ({ model: state, path, value: [] })),
         { model: state, path: "activeVertexID", value: "" });

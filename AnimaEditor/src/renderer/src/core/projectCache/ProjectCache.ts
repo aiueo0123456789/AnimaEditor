@@ -40,7 +40,7 @@ export class ProjectCache {
     return new Runtime_Armature(model);
   }
 
-  public getRuntimesByID(id: ID): Runtimes | null {
+  public getRuntimeByID(id: ID): Runtimes | null {
     for (const runtime of this.runtimes) {
       if (runtime.id === id) {
         return runtime;

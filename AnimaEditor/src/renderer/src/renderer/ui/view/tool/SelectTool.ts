@@ -9,6 +9,9 @@ import { InputManager } from "../../../../manager/InputManager";
 import type { UIComponent_View } from "../View";
 import { Vec2Math, type Vec2 } from "../../../../util/vecMath";
 import { DragTool } from "./DragTool";
+import { bonePoints, geometrySource, spritePoints } from "../ViewGeometry";
+import { Runtime_Sprite } from "../../../../core/projectCache/runtime/Sprite";
+import { Runtime_Armature } from "../../../../core/projectCache/runtime/Armature";
 
 export class SelectTool extends DragTool {
   private points: { position: Vec2; id: ID; group: number }[] = [];
@@ -19,6 +22,8 @@ export class SelectTool extends DragTool {
     const model = editor.editorState.activeObject;
     if (!model) return;
     const state = editor.editorState.getModelStateByID(model.id);
+    const runtime = editor.projectCache.getRuntimeByID(model.id);
+    const source = geometrySource(editor.editorState.editMode);
     const input = editor.getManager(InputManager)!;
     const additive = input.getKey("ShiftLeft") || input.getKey("ShiftRight");
     this.points = [];
@@ -27,11 +32,12 @@ export class SelectTool extends DragTool {
     if (model instanceof Model_Sprite && state instanceof SpriteState) {
       paths = ["selectedVertexIDs"];
       this.initial = [additive ? [...state.selectedVertexIDs] : []];
-      this.points = Object.entries(model.vertices).map(([id, vertex]) => ({ position: [...vertex.co], id, group: 0 }));
+      this.points = spritePoints(model, runtime instanceof Runtime_Sprite ? runtime : null, source).map(point => ({ ...point, group: 0 }));
     } else if (model instanceof Model_Armature && state instanceof ArmatureState) {
       paths = ["selectedHeadIDs", "selectedTailIDs"];
       this.initial = additive ? [[...state.selectedHeadIDs], [...state.selectedTailIDs]] : [[], []];
-      Object.entries(model.bones).forEach(([id, bone]) => {
+      bonePoints(model, runtime instanceof Runtime_Armature ? runtime : null, source).forEach(bone => {
+        const id = bone.id;
         this.bones.push({ id, head: [...bone.head], tail: [...bone.tail] });
         this.points.push({ position: [...bone.head], id, group: 0 }, { position: [...bone.tail], id, group: 1 });
       });

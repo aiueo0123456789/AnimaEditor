@@ -25,15 +25,18 @@ import { DeleteEdgeTool } from "./tool/DeleteEdgeTool";
 import { DeleteVertexTool } from "./tool/DeleteVertexTool";
 import { UIManager } from "../../../manager/ui/UIManager";
 import type { WidgetHandle } from "../../../manager/ui/WidgetTree";
-import { bind, Button, Canvas, Column, Container, Header, Main, Row, Text, Select } from "../../../manager/ui/components";
+import { bind, Button, Canvas, Checkbox, Column, Container, Header, Main, Text, Select } from "../../../manager/ui/components";
 import type { Widget } from "../../../manager/ui/components";
 import { WeightPaintTool } from "./tool/WeightPaintTool";
 
 import { ScaleTool } from "./tool/ScaleTool";
 import { DeleteBoneTool } from "./tool/DeleteBoneTool";
+import { InsertKeyframeTool } from "./tool/InsertKeyframeTool";
 import { CameraRenderData } from "./renderData/CameraRenderData";
 import { EditorEvent, EditorEventType } from "../../../manager/EventManager";
-import { ViewEditModes } from "./ViewEditModes";
+import { ViewEditModes } from "../../../editor/editorState/ViewEditModes";
+import { SetEditModeCommand } from "../../../editor/command/interactionCommand/SetEditModeCommand";
+import { geometrySource } from "./ViewGeometry";
 
 export class View_RenderData {
   public cameraRenderData = new CameraRenderData();
@@ -54,35 +57,36 @@ export class UIComponent_View extends UIComponent {
   private toolbarSignature = "";
   private lastMode: ViewEditModes | null = null;
 
-  private get availableTools(): ToolRender[] {
-    const allowed = this.spaceData.modeToToolMap[this.spaceData.editMode] ?? [];
+  private availableTools(editor: AnimaEditor): ToolRender[] {
+    const allowed = this.spaceData.modeToToolMap[editor.editorState.editMode] ?? [];
     return this.tools.filter(tool => allowed.includes(tool.callTool));
   }
 
-  private syncTool(): void {
-    const tools = this.availableTools;
+  private syncTool(editor: AnimaEditor): void {
+    const tools = this.availableTools(editor);
     if (!tools.some(tool => tool.id === this.currentTool)) this.currentTool = tools[0]?.id ?? "";
-    if (this.lastMode === this.spaceData.editMode && this.activeToolID === this.currentTool) return;
+    if (this.lastMode === editor.editorState.editMode && this.activeToolID === this.currentTool) return;
     this.toolManager.activeTool?.deactivate();
     this.toolManager.activeTool = null;
     this.gesture = false;
-    this.lastMode = this.spaceData.editMode;
+    this.lastMode = editor.editorState.editMode;
     const tool = tools.find(item => item.id === this.currentTool);
     if (tool) this.toolManager.activate(tool.callTool);
     this.activeToolID = this.currentTool;
   }
 
-  private buildToolbar(ui: UIManager): Widget {
+  private buildToolbar(ui: UIManager, editor: AnimaEditor): Widget {
     const labels: Record<string, string> = { objectSelect: "オブジェクト選択", select: "頂点選択", translate: "移動",
       rotation: "回転", scale: "拡大縮小", addVertex: "頂点追加", DeleteVertex: "頂点削除", AddEdge: "辺追加",
-      DeleteEdge: "辺削除", AddBone: "ボーン追加", DeleteBone: "ボーン削除", AddArmature: "アーマチュア追加", WeightPaint: "ウェイトペイント" };
-    return Column({ gap: 3, children: this.availableTools.map(tool => Button({
+      DeleteEdge: "辺削除", AddBone: "ボーン追加", DeleteBone: "ボーン削除", AddArmature: "アーマチュア追加", WeightPaint: "ウェイトペイント",
+      InsertKeyframe: "キーフレーム挿入" };
+    return Column({ gap: 3, children: this.availableTools(editor).map(tool => Button({
           label: labels[tool.id] ?? tool.id, tooltip: labels[tool.id] ?? tool.id, icon: tool.icon, iconOnly: true,
           pressed: bind({ read: () => this.currentTool === tool.id }),
           onPress: () => {
-            if (!this.availableTools.includes(tool)) return;
+            if (!this.availableTools(editor).includes(tool)) return;
             this.currentTool = tool.id;
-            this.syncTool();
+            this.syncTool(editor);
             if (this.toolbarHandle) ui.invalidateWidget(this.toolbarHandle);
           },
     })) });
@@ -101,6 +105,7 @@ export class UIComponent_View extends UIComponent {
     if (this.handle) editor.getManager(UIManager)?.disposeWidget(this.handle);
     this.handle = null;
     this.host = null;
+    this.spaceData.renderData.release(this);
     this._renderData?.dispose();
     this._renderData = null;
     for (const buffer of this.uniforms.values()) buffer.destroy();
@@ -145,6 +150,7 @@ export class UIComponent_View extends UIComponent {
       new ToolRender("DeleteBone", "removeBone", DeleteBoneTool),
       new ToolRender("AddArmature", "addPoint", AddArmatureTool),
       new ToolRender("WeightPaint", "addPoint", WeightPaintTool),
+      new ToolRender("InsertKeyframe", "insertKeyframe", InsertKeyframeTool),
     ];
   }
 
@@ -186,7 +192,7 @@ export class UIComponent_View extends UIComponent {
   public override input(editor: AnimaEditor): void { this.processInput(editor); }
 
   private processInput(editor: AnimaEditor): void {
-    this.syncTool();
+    this.syncTool(editor);
     const input = editor.getManager(InputManager);
     if (!input || !this.canvas) return;
     this.canvasBBox = this.canvas.getBoundingClientRect();
@@ -277,24 +283,39 @@ export class UIComponent_View extends UIComponent {
       const modeChange = (): Widget => Select({
         label: "編集モード",
         observeEvents: [
+          new EditorEvent(EditorEventType.change, editor, "project"),
+          new EditorEvent(EditorEventType.change, editor.editorState, "editMode"),
           new EditorEvent(EditorEventType.change, editor.editorState, "activeObject"),
         ],
-        value: bind({ read: () => this.spaceData.editMode }),
+        value: bind({ read: () => editor.editorState.editMode }),
         options: editor.editorState.getModelStateByID(editor.editorState.activeObject?.id ?? "")?.availableModes.map(mode => ({ value: mode, label: mode })) ?? [{value: ViewEditModes.OBJECT, label: ViewEditModes.OBJECT}],
-        onChange: value => { if (value && Object.values(ViewEditModes).includes(value as ViewEditModes)) {
-          this.spaceData.editMode = value as ViewEditModes;
-          this.syncTool();
-        }}
+        onChange: value => {
+          if (value && Object.values(ViewEditModes).includes(value as ViewEditModes)) {
+            if (value === editor.editorState.editMode) return;
+            const commands = editor.getManager(CommandManager);
+            if (!commands || commands.commandRecorder) return;
+            const recorder = commands.setCommandRecorder("Change edit mode");
+            if (!recorder) return;
+            recorder.setCommand(SetEditModeCommand, { editMode: value as ViewEditModes });
+            if (!recorder.command) { commands.cancelCommandRecorder(); return; }
+            recorder.commitCommand();
+            commands.commitCommandRecorder();
+            this.syncTool(editor);
+          }
+        },
+        rebuild: modeChange,
       });
       this.handle = ui.mountWidget(parent, Column({ className: "ui-panel ui-view", children: [
         Header({ gap: 8, children: [
           Text({ text: this.name }),
-          modeChange
+          modeChange(),
+          Checkbox({ label: "比較表示", value: bind({ read: () => this.spaceData.showReferenceGeometry }),
+            onChange: value => { this.spaceData.showReferenceGeometry = value; } }),
         ] }),
         Main({ className: "ui-view-main", padding: 0, overflow: "hidden", children: [
           Canvas({ className: "ui-view-canvas", label: "Animation viewport", onMount: canvas => this.mountCanvas(editor, canvas) }),
           Container({ className: "ui-view-toolbar", onMount: element => {
-            const handle = ui.mountWidget(element, this.buildToolbar(ui));
+            const handle = ui.mountWidget(element, this.buildToolbar(ui, editor));
             this.toolbarHandle = handle;
             this.toolbarSignature = "";
             return () => { ui.disposeWidget(handle); this.toolbarHandle = null; };
@@ -302,12 +323,13 @@ export class UIComponent_View extends UIComponent {
         ] }),
       ] }));
       this.host = parent;
+      this.spaceData.renderData.acquire(this);
     }
-    this.syncTool();
-    const signature = JSON.stringify([this.spaceData.editMode, this.availableTools.map(tool => tool.id)]);
+    this.syncTool(editor);
+    const signature = JSON.stringify([editor.editorState.editMode, this.availableTools(editor).map(tool => tool.id)]);
     const modeChanged = signature !== this.toolbarSignature;
     if (this.toolbarHandle) {
-      if (signature !== this.toolbarSignature) ui.resetWidget(this.toolbarHandle, this.buildToolbar(ui));
+      if (signature !== this.toolbarSignature) ui.resetWidget(this.toolbarHandle, this.buildToolbar(ui, editor));
       this.toolbarSignature = signature;
       ui.invalidateWidget(this.toolbarHandle);
     }
@@ -315,6 +337,7 @@ export class UIComponent_View extends UIComponent {
 
     const sprites: Runtime_Sprite[] = editor.projectCache.getRuntimesByType(Runtime_Sprite);
     const armatures: Runtime_Armature[] = editor.projectCache.getRuntimesByType(Runtime_Armature);
+    const source = geometrySource(editor.editorState.editMode);
 
     this.spaceData.renderData.retain(new Set([...sprites, ...armatures].map(runtime => runtime.id))); // 表示しないrenderDataの削除
     if (this.canvas && this.canvasBBox && this.canvasContext && this.canvasBBox.width > 0 && this.canvasBBox.height > 0) {
@@ -332,6 +355,8 @@ export class UIComponent_View extends UIComponent {
           renderData = this.spaceData.renderData.addSpriteRenderData(sprite);
         }
         if (renderData instanceof View_SpriteRenderData) renderData.update(sprite, state);
+        const modelData = this.spaceData.renderData.getRenderData(sprite.id, "model");
+        if (modelData instanceof View_SpriteRenderData) modelData.update(sprite, state, "model");
       }
       for (const armature of armatures) {
         const state = editor.editorState.getModelStateByID(armature.id);
@@ -341,6 +366,8 @@ export class UIComponent_View extends UIComponent {
           renderData = this.spaceData.renderData.addArmatureRenderData(armature);
         }
         if (renderData instanceof View_ArmatureRenderData) renderData.update(armature, state);
+        const modelData = this.spaceData.renderData.getRenderData(armature.id, "model");
+        if (modelData instanceof View_ArmatureRenderData) modelData.update(armature, state, "model");
       }
 
       // レンダリング
@@ -376,7 +403,7 @@ export class UIComponent_View extends UIComponent {
 
         // シーンスプライト
         for (const sprite of sprites.sort((a, b) => a.zIndex - b.zIndex)) {
-          const renderData = this.spaceData.renderData.getRenderData(sprite.id);
+          const renderData = this.spaceData.renderData.getRenderData(sprite.id, source);
           if (renderData instanceof View_SpriteRenderData) {
             if (!(sprite.texture?.texture && renderData.vertexBuffer && renderData.indexBuffer && renderData.edgeBuffer)) continue ;
 
@@ -416,14 +443,40 @@ export class UIComponent_View extends UIComponent {
           }
         }
 
+        // Reference geometry is visual only; picking continues to use the edit-mode source.
+        if (this.spaceData.showReferenceGeometry) {
+          const reference = source === "model" ? "runtime" : "model";
+          for (const sprite of sprites) {
+            const data = this.spaceData.renderData.getRenderData(sprite.id, reference);
+            const pipeline = pipelineManager.getPipelineByID("Overlay-SpriteIndices");
+            if (!(data instanceof View_SpriteRenderData) || !data.vertexBuffer || !data.indexBuffer || !pipeline) continue;
+            mainRenderPass.setPipeline(pipeline.pipeline);
+            mainRenderPass.setBindGroup(0, simpleWebGPU.createGroup(pipeline.groupLayout, [
+              this.renderData.cameraRenderData.cameraBuffer, data.vertexBuffer, data.indexBuffer, this.uniform([.3, .45, .6, .4]),
+            ]));
+            mainRenderPass.draw(12, sprite.indicesNum);
+          }
+          for (const armature of armatures) {
+            const data = this.spaceData.renderData.getRenderData(armature.id, reference);
+            const pipeline = pipelineManager.getPipelineByID("Overlay-ArmatureBone");
+            if (!(data instanceof View_ArmatureRenderData) || !pipeline) continue;
+            for (const buffer of pipeline.vertexBuffers) if (buffer.source === "VERTEX") mainRenderPass.setVertexBuffer(buffer.location, data.vertexBuffer);
+            mainRenderPass.setPipeline(pipeline.pipeline);
+            mainRenderPass.setBindGroup(0, simpleWebGPU.createGroup(pipeline.groupLayout, [
+              this.renderData.cameraRenderData.cameraBuffer, data.boneBuffer, this.uniform([.3, .45, .6, .4]),
+            ]));
+            mainRenderPass.draw(5, data.boneCount);
+          }
+        }
+
         // オーバーレイスプライト
         for (const sprite of sprites) {
           if (editor.editorState.activeObject === sprite.model) {
-            const renderData = this.spaceData.renderData.getRenderData(sprite.id);
+            const renderData = this.spaceData.renderData.getRenderData(sprite.id, source);
             if (!(renderData instanceof View_SpriteRenderData)) continue ;
             if (!(renderData.vertexBuffer && renderData.indexBuffer && renderData.edgeBuffer && renderData.selectVertexBuffer && renderData.silhouetteEdgeBuffer && renderData.weightBuffer)) continue ;
 
-            if (this.toolManager.activeTool instanceof WeightPaintTool) {
+            if (editor.editorState.editMode === ViewEditModes.WEIGHTPAINT) {
               const spriteIndicesPipeline = pipelineManager.getPipelineByID("Overlay-SpriteWeight");
               if (spriteIndicesPipeline) {
                 const bindGroup = simpleWebGPU.createGroup(
@@ -533,7 +586,7 @@ export class UIComponent_View extends UIComponent {
 
         // オーバーレイアーマチュア
         for (const armature of armatures) {
-          const renderData = this.spaceData.renderData.getRenderData(armature.id);
+          const renderData = this.spaceData.renderData.getRenderData(armature.id, source);
           if (!(renderData instanceof View_ArmatureRenderData)) continue ;
           const armatureBonePipeline = pipelineManager.getPipelineByID("Overlay-ArmatureBone");
           if (armatureBonePipeline) {
@@ -556,7 +609,7 @@ export class UIComponent_View extends UIComponent {
             );
             mainRenderPass.setBindGroup(0, bindGroup);
             mainRenderPass.setPipeline(armatureBonePipeline.pipeline);
-            mainRenderPass.draw(5, armature.bones.length);
+            mainRenderPass.draw(5, renderData.boneCount);
 
             if (renderData.selectedBoneCount) {
               const bindGroup = simpleWebGPU.createGroup(
@@ -569,7 +622,7 @@ export class UIComponent_View extends UIComponent {
               );
               mainRenderPass.setBindGroup(0, bindGroup);
               mainRenderPass.setPipeline(armatureBonePipeline.pipeline);
-              mainRenderPass.draw(5, renderData.selectedVertexCount);
+              mainRenderPass.draw(5, renderData.selectedBoneCount);
             }
           } else {
             console.warn("アーマチュアオーバレイ表示ようのパイプライン1がありません");
@@ -588,7 +641,7 @@ export class UIComponent_View extends UIComponent {
               );
               mainRenderPass.setBindGroup(0, bindGroup);
               mainRenderPass.setPipeline(boneVertexPipeline.pipeline);
-              mainRenderPass.draw(4, armature.bones.length * 2);
+              mainRenderPass.draw(4, renderData.boneCount * 2);
 
               if (renderData.selectedVertexCount) {
                 const bindGroup = simpleWebGPU.createGroup(
@@ -622,6 +675,7 @@ export class UIComponent_View extends UIComponent {
         simpleWebGPU.device.queue.submit([commandEncoder.finish()]);
       }
     }
+
     if (this.objectIDTextureView) {
       const commandEncoder = simpleWebGPU.device.createCommandEncoder();
       const mainRenderPass = commandEncoder.beginRenderPass({
@@ -637,7 +691,7 @@ export class UIComponent_View extends UIComponent {
 
       // スプライト
       for (const sprite of sprites) {
-        const renderData = this.spaceData.renderData.getRenderData(sprite.id);
+        const renderData = this.spaceData.renderData.getRenderData(sprite.id, source);
         if (!(renderData instanceof View_SpriteRenderData)) continue;
         if (!(renderData.indexBuffer)) continue;
 
@@ -677,7 +731,7 @@ export class UIComponent_View extends UIComponent {
 
       // アーマチュア
       for (const armature of armatures) {
-        const renderData = this.spaceData.renderData.getRenderData(armature.id);
+        const renderData = this.spaceData.renderData.getRenderData(armature.id, source);
         if (!(renderData instanceof View_ArmatureRenderData)) continue;
         if (!(renderData.boneBuffer)) continue;
 
@@ -702,7 +756,7 @@ export class UIComponent_View extends UIComponent {
           );
           mainRenderPass.setBindGroup(0, bindGroup);
           mainRenderPass.setPipeline(armaturePipeline.pipeline);
-          mainRenderPass.draw(5, armature.bones.length);
+          mainRenderPass.draw(5, renderData.boneCount);
         } else {
           console.warn("パイプライン ObjectID-Armature が存在しません")
         }

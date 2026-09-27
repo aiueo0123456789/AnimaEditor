@@ -1,5 +1,5 @@
 import { BoneID, Model_Armature } from "../../../../core/project/model/Armature";
-import { ViewEditModes } from "../../../../renderer/ui/view/ViewEditModes";
+import { ViewEditModes } from "../../ViewEditModes";
 import { State } from "../State";
 
 export type { BoneID };

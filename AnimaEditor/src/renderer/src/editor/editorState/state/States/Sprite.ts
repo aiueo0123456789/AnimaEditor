@@ -1,5 +1,5 @@
 import { Model_Sprite } from "../../../../core/project/model/Sprite";
-import { ViewEditModes } from "../../../../renderer/ui/view/ViewEditModes";
+import { ViewEditModes } from "../../ViewEditModes";
 import { ID } from "../../../Editor";
 import { State } from "../State";
 
