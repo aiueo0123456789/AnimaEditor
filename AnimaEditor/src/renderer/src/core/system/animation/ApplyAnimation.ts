@@ -23,8 +23,8 @@ export class System_ApplyAnimation extends System {
     const currentFrame = projectCache.sceneConfig.currentFrame;
     if (this._lastFrame !== currentFrame) {
       for (const runtime of projectCache.getRuntimesByType(Runtime_Armature)) runtime.setAnimation();
-      for (const runtime of projectCache.getRuntimesByType(Runtime_Sprite)) runtime.setAnimation();
     }
+    for (const runtime of projectCache.getRuntimesByType(Runtime_Sprite)) runtime.setAnimation();
     this._lastFrame = currentFrame;
   }
 }

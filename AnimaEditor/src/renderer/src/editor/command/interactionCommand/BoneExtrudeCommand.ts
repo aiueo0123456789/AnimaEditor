@@ -33,6 +33,7 @@ export class BoneExtrudeCommand extends InteractionCommand {
     this.newBone = Model_Armature.createBone({
       head: Vec2Math.copy(this.origin), tail: Vec2Math.copy(this.origin),
       name: parent.name,
+      groupID: parent.groupID ?? "",
       parentID: { aramatureID: this.model.id, boneID: this.parentID },
     });
     this.newBoneID = crypto.randomUUID();

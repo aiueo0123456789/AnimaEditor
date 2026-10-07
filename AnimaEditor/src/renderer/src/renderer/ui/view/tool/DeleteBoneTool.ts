@@ -1,23 +1,27 @@
 import type { AnimaEditor } from "../../../../editor/Editor";
 import type { UIComponent_View } from "../View";
-import { InputManager } from "../../../../manager/InputManager";
-import { Tool } from "./Tool";
+import type { InputManager } from "../../../../manager/InputManager";
 import { Model_Armature, BoneReference } from "../../../../core/project/model/Armature";
 import { Model_Sprite } from "../../../../core/project/model/Sprite";
 import { ArmatureState } from "../../../../editor/editorState/state/States/Armature";
 import type { PropertyEdit } from "../../../../editor/command/interactionCommand/SetPropertiesCommand";
 import { SetPropertiesCommand } from "../../../../editor/command/interactionCommand/SetPropertiesCommand";
 import { RemoveValueCommand } from "../../../../editor/command/primitiveCommand/RemoveValue";
-import { CommandManager } from "../../../../manager/CommandManager";
-export class DeleteBoneTool extends Tool {
-  public override update(editor: AnimaEditor, _view: UIComponent_View): void {
+import type { CommandRecorder } from "../../../../manager/CommandManager";
+import { SelectionDragTool } from "./SelectionDragTool";
+export class DeleteBoneTool extends SelectionDragTool {
+  public override readonly id = "DeleteBone";
+  public override readonly label = "ボーン削除";
+  public override readonly icon = "removeBone";
+  protected start(editor: AnimaEditor, _view: UIComponent_View, recorder: CommandRecorder): void {
     const model = editor.editorState.activeObject;
-    if (!editor.getManager(InputManager)?.getKeyDown("Mouse0") || !(model instanceof Model_Armature)) return;
+    if (!(model instanceof Model_Armature)) return;
     const state = editor.editorState.getModelStateByID(model.id);
     if (!(state instanceof ArmatureState)) return;
     const ids = new Set([...state.selectedBoneIDs, ...state.selectedHeadIDs, ...state.selectedTailIDs].filter(id => Boolean(model.bones[id])));
     if (!ids.size) return;
     const edits: PropertyEdit[] = [];
+    if (ids.has(state.activeBoneID)) edits.push({ model: state, path: "activeBoneID", value: "" });
     for (const armature of editor.project.getModelsByType(Model_Armature)) {
         Object.entries(armature.bones).forEach(([boneID, bone]) => {
           if (bone.parentID?.aramatureID === model.id && ids.has(bone.parentID.boneID))
@@ -35,18 +39,13 @@ export class DeleteBoneTool extends Tool {
     edits.push(
         ...["selectedHeadIDs", "selectedTailIDs"].map(path => ({ model: state, path, value: [] })),
         { model: state, path: "activeVertexID", value: "" });
-    const manager = editor.getManager(CommandManager);
-    if (!manager || manager.commandRecorder) return;
-    const recorder = manager.setCommandRecorder("Delete bones");
-    if (!recorder) return;
     for (const id of ids) {
       recorder.setCommand(RemoveValueCommand, { model, path: "bones", removeKey: id });
-      if (!recorder.command) { manager.cancelCommandRecorder(); return; }
+      if (!recorder.command) return;
       recorder.commitCommand();
     }
     recorder.setCommand(SetPropertiesCommand, { edits });
-    if (!recorder.command) { manager.cancelCommandRecorder(); return; }
-    recorder.commitCommand();
-    manager.commitCommandRecorder();
+    if (recorder.command) recorder.commitCommand();
   }
+  protected move(_editor: AnimaEditor, _view: UIComponent_View, _input: InputManager, _recorder: CommandRecorder): void {}
 }

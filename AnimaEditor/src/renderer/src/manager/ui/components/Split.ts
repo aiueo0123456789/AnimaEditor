@@ -1,5 +1,6 @@
 import { defineWidget } from "./Widget";
 import type { WidgetChild, WidgetDefinition, WidgetProps } from "./Widget";
+import type { ContextMenuSource } from "../ContextMenuManager";
 
 export interface SplitOptions {
   /** Horizontal places first on the left; vertical places it on top. */
@@ -10,6 +11,7 @@ export interface SplitOptions {
   readonly minSecond?: number;
   readonly label?: string;
   readonly onRatioChange?: (ratio: number) => void;
+  readonly resizerContextMenu?: ContextMenuSource;
 }
 export interface SplitProps extends WidgetProps, SplitOptions {
   readonly first: WidgetChild;

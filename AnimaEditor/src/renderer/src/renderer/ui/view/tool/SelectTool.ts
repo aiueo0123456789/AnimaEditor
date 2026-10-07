@@ -14,6 +14,9 @@ import { Runtime_Sprite } from "../../../../core/projectCache/runtime/Sprite";
 import { Runtime_Armature } from "../../../../core/projectCache/runtime/Armature";
 
 export class SelectTool extends DragTool {
+  public override readonly id = "select";
+  public override readonly label = "頂点選択";
+  public override readonly icon = "select";
   private points: { position: Vec2; id: ID; group: number }[] = [];
   private bones: { id: ID; head: Vec2; tail: Vec2 }[] = [];
   private initial: ID[][] = [];

@@ -6,6 +6,9 @@ import { Model_Sprite } from "../../../../core/project/model/Sprite";
 import { CommandManager } from "../../../../manager/CommandManager";
 import { AddValueCommand } from "../../../../editor/command/primitiveCommand/AddValue";
 export class AddVertexTool extends Tool {
+  public override readonly id = "addVertex";
+  public override readonly label = "頂点追加";
+  public override readonly icon = "addPoint";
   public override update(editor: AnimaEditor, view: UIComponent_View): void {
     const input = editor.getManager(InputManager), model = editor.editorState.activeObject;
     if (!input?.getKeyDown("Mouse0") || !(model instanceof Model_Sprite)) return;

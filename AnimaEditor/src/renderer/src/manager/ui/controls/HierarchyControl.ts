@@ -7,7 +7,7 @@ export function createHierarchyControl(props: HierarchyProps) {
   element.setAttribute("aria-label", props.label);
   let controller = new AbortController();
   let items: readonly HierarchyItem[] = [];
-  let selected: string | null = null;
+  let selected: readonly string[] = [];
   let filter = "";
   let focused: string | null = null;
   let disposed = false;
@@ -64,7 +64,7 @@ export function createHierarchyControl(props: HierarchyProps) {
         node.setAttribute("aria-label", item.label);
         node.dataset.id = item.id;
         if (branch) node.setAttribute("aria-expanded", String(expanded));
-        if (item.selectable !== false) node.setAttribute("aria-selected", String(selected === item.id));
+        if (item.selectable !== false) node.setAttribute("aria-selected", String(selected.includes(item.id)));
         const row = document.createElement("div");
         row.className = "ui-tree-row";
         row.style.paddingLeft = `${depth * 16 + 6}px`;
@@ -94,7 +94,7 @@ export function createHierarchyControl(props: HierarchyProps) {
         row.addEventListener("click", event => {
           event.stopPropagation();
           focus(item.id);
-          if (item.selectable !== false) props.onSelect(item.id); else toggleBranch();
+          if (item.selectable !== false) props.onSelect(item.id, event.shiftKey || event.ctrlKey || event.metaKey); else toggleBranch();
         }, { signal: controller.signal });
         row.addEventListener("dblclick", event => { event.stopPropagation(); rename(item, node, caption); }, { signal: controller.signal });
         node.addEventListener("keydown", event => {
@@ -110,7 +110,7 @@ export function createHierarchyControl(props: HierarchyProps) {
           else if (event.key === "ArrowRight" && branch) { if (!expanded) toggleBranch(); else if (item.children?.length) move(index + 1); }
           else if (event.key === "ArrowLeft") { if (branch && expanded && !filter) toggleBranch(); else if (parent) focus(parent); }
           else if (event.key === "F2") rename(item, node, caption);
-          else if (event.key === "Enter" || event.key === " ") { if (item.selectable !== false) props.onSelect(item.id); else toggleBranch(); }
+          else if (event.key === "Enter" || event.key === " ") { if (item.selectable !== false) props.onSelect(item.id, event.shiftKey || event.ctrlKey || event.metaKey); else toggleBranch(); }
         }, { signal: controller.signal });
         if (branch && expanded) {
           const group = document.createElement("div");
@@ -127,7 +127,7 @@ export function createHierarchyControl(props: HierarchyProps) {
       empty.textContent = "項目なし";
       element.append(empty);
     }
-    const target = rows.find(row => row.item.id === focused) ?? rows.find(row => row.item.id === selected) ?? rows[0];
+    const target = rows.find(row => row.item.id === focused) ?? rows.find(row => selected.includes(row.item.id)) ?? rows[0];
     focused = target?.item.id ?? null;
     element.tabIndex = rows.length ? -1 : 0;
     for (const row of rows) row.node.tabIndex = row === target ? 0 : -1;
@@ -146,9 +146,10 @@ export function createHierarchyControl(props: HierarchyProps) {
       for (const id of collapsed) if (!ids.has(id)) collapsed.delete(id);
       render();
     },
-    setSelected(value: string | null) {
-      selected = value;
-      for (const row of rows) if (row.item.selectable !== false) row.node.setAttribute("aria-selected", String(row.item.id === value));
+    setSelected(value: string | null | readonly string[]) {
+      element.setAttribute("aria-multiselectable", String(Array.isArray(value)));
+      selected = typeof value === "string" ? [value] : value ?? [];
+      for (const row of rows) if (row.item.selectable !== false) row.node.setAttribute("aria-selected", String(selected.includes(row.item.id)));
     },
     setFilter(value: string) { const next = value.trim().toLocaleLowerCase(); if (next !== filter) { filter = next; render(); } },
     dispose() { disposed = true; controller.abort(); items = []; rows = []; collapsed.clear(); element.remove(); },

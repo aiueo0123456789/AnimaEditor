@@ -22,6 +22,7 @@ import type { SetPropertiesUpdate } from "../editor/command/interactionCommand/S
 import type { AddValueCommandUpdate } from "../editor/command/primitiveCommand/AddValue";
 import type { RemoveValueCommandUpdate } from "../editor/command/primitiveCommand/RemoveValue";
 import type { AddDictionaryValuesCommandUpdate } from "../editor/command/interactionCommand/AddDictionaryValuesCommand";
+import type { AppendModelsCommandUpdate } from "../editor/command/interactionCommand/AppendModelsCommand";
 
 type PrimitiveCommandInputs = PrimitiveCommandInput
 type InsertElementCommandInputs = InteractionCommandInput;
@@ -30,7 +31,8 @@ export type CommandUpdates = ClearCommandUpdate | PushElementCommandUpdate | Ins
   RemoveItemCommandUpdate | RemoveItemsCommandUpdate | ConcatArrayCommandUpdate | SetPropertyCommandUpdate |
   SetVec2CommandUpdate | TranslateCommandUpdate | SetActiveObjectCommandUpdate | SetProjectCommandUpdate |
   BoneExtrudeCommandUpdate | AddBoneWeightPaintCommandUpdate | TransformCommandUpdate | SetPropertiesUpdate |
-  AddValueCommandUpdate | RemoveValueCommandUpdate | AddDictionaryValuesCommandUpdate | SetEditModeCommandUpdate;
+  AddValueCommandUpdate | RemoveValueCommandUpdate | AddDictionaryValuesCommandUpdate | SetEditModeCommandUpdate |
+  AppendModelsCommandUpdate;
 
 function isSubclassOf(child: Function, parent: Function): boolean {
   return child.prototype instanceof parent || child === parent;

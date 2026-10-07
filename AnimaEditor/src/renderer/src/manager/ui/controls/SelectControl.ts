@@ -111,7 +111,7 @@ export function createSelectControl(props: SelectProps) {
   function open(): void {
     if (button.disabled || opened) return;
     opened = true;
-    document.body.append(popup);
+    (button.closest("[data-widget='submenu'], .ui-context-menu-host") ?? document.body).append(popup);
     button.setAttribute("aria-expanded", "true");
     filter("");
     const selected = props.options.findIndex(option => option.value === current && !option.disabled);

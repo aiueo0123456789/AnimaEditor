@@ -20,7 +20,6 @@ export function createSplitControl(props: SplitOptions) {
   let ratio = Number.isFinite(props.ratio) ? Math.max(0, Math.min(1, props.ratio!)) : .5;
   let effective = ratio;
   let pointer: number | null = null;
-  let startRatio = ratio;
   let offset = 0;
   const minimum = (value: number | undefined): number => Number.isFinite(value) ? Math.max(0, value!) : 60;
   function metrics() {
@@ -56,7 +55,6 @@ export function createSplitControl(props: SplitOptions) {
     if (event.button !== 0 || pointer !== null) return;
     event.preventDefault();
     separator.focus();
-    startRatio = ratio;
     const rect = separator.getBoundingClientRect();
     offset = vertical ? event.clientY - rect.top : event.clientX - rect.left;
     pointer = event.pointerId;
@@ -81,7 +79,7 @@ export function createSplitControl(props: SplitOptions) {
   }, { signal });
   const resize = new ResizeObserver(render);
   resize.observe(element);
-  return { element, childContainers: [first, second] as const,
+  return { element, separator, childContainers: [first, second] as const,
     setRatio(value: number): void {
       if (pointer !== null || !Number.isFinite(value) || value === ratio) return;
       ratio = Math.max(0, Math.min(1, value));

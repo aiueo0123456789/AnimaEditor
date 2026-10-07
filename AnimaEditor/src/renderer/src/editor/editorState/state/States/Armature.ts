@@ -1,14 +1,14 @@
-import { BoneID, Model_Armature } from "../../../../core/project/model/Armature";
+import { Model_Armature } from "../../../../core/project/model/Armature";
+import { ID } from "../../../Editor";
 import { ViewEditModes } from "../../ViewEditModes";
 import { State } from "../State";
 
-export type { BoneID };
-
 export class ArmatureState extends State<Model_Armature> {
-  // public selectedBoneIDs: BoneID[] = [];
-  public selectedHeadIDs: BoneID[] = [];
-  public selectedTailIDs: BoneID[] = [];
-  public activeVertexID: BoneID = "";
+  public activeGroupID: ID = "";
+  public activeBoneID: ID = "";
+  public selectedHeadIDs: ID[] = [];
+  public selectedTailIDs: ID[] = [];
+  public activeVertexID: ID = "";
   public override availableModes: ViewEditModes[] = [ViewEditModes.OBJECT, ViewEditModes.BONE, ViewEditModes.BONEANIMATION];
 
   constructor(model: Model_Armature) {

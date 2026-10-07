@@ -7,10 +7,10 @@ import type { TranslateTarget } from "../../../../editor/command/interactionComm
 import { TransformCommand } from "../../../../editor/command/interactionCommand/TransformCommand";
 import type { AnimaEditor } from "../../../../editor/Editor";
 import type { CommandRecorder } from "../../../../manager/CommandManager";
-import type { InputManager } from "../../../../manager/InputManager";
+import { InputManager } from "../../../../manager/InputManager";
 import type { UIComponent_View } from "../View";
 import { Vec2Math, type Vec2 } from "../../../../util/vecMath";
-import { DragTool } from "./DragTool";
+import { SelectionDragTool } from "./SelectionDragTool";
 import { ViewEditModes } from "../../../../editor/editorState/ViewEditModes";
 import { Runtime_Armature } from "../../../../core/projectCache/runtime/Armature";
 import { BonePoseTransformCommand } from "../../../../editor/command/interactionCommand/BonePoseTransformCommand";
@@ -20,11 +20,19 @@ function elementTarget(model: Model_Sprite | Model_Armature, collection: "vertic
   return { model, path: `${collection}.${id}.${property}` };
 }
 
-export class TransformTool extends DragTool {
+export class TransformTool extends SelectionDragTool {
+  public override readonly id: string;
+  public override readonly label: string;
+  public override readonly icon: string;
   private pivot: Vec2 = [0, 0];
   private angle = 0;
   private lastAngle = 0;
-  constructor(private readonly mode: "translate" | "rotate" | "scale") { super(); }
+  constructor(private readonly mode: "translate" | "rotate" | "scale") {
+    super();
+    this.id = mode === "rotate" ? "rotation" : mode;
+    this.label = mode === "translate" ? "移動" : mode === "rotate" ? "回転" : "拡大縮小";
+    this.icon = mode;
+  }
   protected start(editor: AnimaEditor, _view: UIComponent_View, recorder: CommandRecorder): void {
     const editMode = editor.editorState.editMode;
     const model = editor.editorState.activeObject;

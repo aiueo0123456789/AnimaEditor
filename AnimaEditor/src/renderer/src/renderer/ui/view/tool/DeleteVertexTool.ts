@@ -8,6 +8,9 @@ import { CommandManager } from "../../../../manager/CommandManager";
 import { RemoveValueCommand } from "../../../../editor/command/primitiveCommand/RemoveValue";
 import { SetPropertiesCommand } from "../../../../editor/command/interactionCommand/SetPropertiesCommand";
 export class DeleteVertexTool extends Tool {
+  public override readonly id = "DeleteVertex";
+  public override readonly label = "頂点削除";
+  public override readonly icon = "removePoint";
   public override update(editor: AnimaEditor, _view: UIComponent_View): void {
     const model = editor.editorState.activeObject;
     if (!editor.getManager(InputManager)?.getKeyDown("Mouse0") || !(model instanceof Model_Sprite)) return;

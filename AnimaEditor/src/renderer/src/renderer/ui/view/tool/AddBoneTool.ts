@@ -6,8 +6,11 @@ import type { CommandRecorder } from "../../../../manager/CommandManager";
 import type { InputManager } from "../../../../manager/InputManager";
 import type { UIComponent_View } from "../View";
 import { Vec2Math } from "../../../../util/vecMath";
-import { DragTool } from "./DragTool";
-export class AddBoneTool extends DragTool {
+import { SelectionDragTool } from "./SelectionDragTool";
+export class AddBoneTool extends SelectionDragTool {
+  public override readonly id = "AddBone";
+  public override readonly label = "ボーン追加";
+  public override readonly icon = "addBone";
   private additions: { key: string; value: Model_Armature.Bone }[] = [];
   protected start(editor: AnimaEditor, _view: UIComponent_View, recorder: CommandRecorder): void {
     const model = editor.editorState.activeObject;
@@ -19,9 +22,9 @@ export class AddBoneTool extends DragTool {
       for (const id of new Set(indices)) {
         const parent = model.bones[id];
         if (parent) this.additions.push({ key: crypto.randomUUID(), value: Model_Armature.createBone({ name: "Bone", head: [...parent[part]], tail: [...parent[part]],
-          parentID: { aramatureID: model.id, boneID: id } }) });
+          parentID: { aramatureID: model.id, boneID: id }, groupID: parent.groupID ?? "" }) });
       }
-    if (!this.additions.length) this.additions.push({ key: crypto.randomUUID(), value: Model_Armature.createBone({ name: "Bone", head: [...this.origin], tail: [...this.origin] }) });
+    if (!this.additions.length) this.additions.push({ key: crypto.randomUUID(), value: Model_Armature.createBone({ name: "Bone", head: [...this.origin], tail: [...this.origin], parentID: { aramatureID: "", boneID: "" }, groupID: "" }) });
     recorder.setCommand(AddDictionaryValuesCommand, { model, path: "bones", values: this.additions });
   }
   protected move(_editor: AnimaEditor, view: UIComponent_View, input: InputManager, recorder: CommandRecorder): void {

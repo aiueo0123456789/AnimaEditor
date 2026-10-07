@@ -140,7 +140,10 @@ export class System_Init_Sprite extends System {
       }
 
       if (hasChanged) {
-        const indices = runtime.vertices.length < 3 ? [] : cutSilhouetteOutTriangle(runtime.vertices, cdt(runtime.vertices, runtime.edges), runtime.silhouetteEdges);
+        // Silhouette boundaries must constrain CDT as well as filter its output.
+        const constraints = [...new Map([...runtime.edges, ...runtime.silhouetteEdges].map(edge =>
+          [[...edge].sort((a, b) => a - b).join(":"), edge])).values()];
+        const indices = runtime.vertices.length < 3 ? [] : cutSilhouetteOutTriangle(runtime.vertices, cdt(runtime.vertices, constraints), runtime.silhouetteEdges);
         // const indices = cdt(runtime.vertices, runtime.edges);
         runtime.indices.length = 0;
         for (let i = 0; i < indices.length; i++) {

@@ -1,15 +1,18 @@
 import type { AnimaEditor } from "../../../../editor/Editor";
 import type { UIComponent_View } from "../View";
-import { InputManager } from "../../../../manager/InputManager";
-import { Tool } from "./Tool";
+import type { InputManager } from "../../../../manager/InputManager";
 import { Model_Sprite } from "../../../../core/project/model/Sprite";
 import { SpriteState } from "../../../../editor/editorState/state/States/Sprite";
-import { CommandManager } from "../../../../manager/CommandManager";
+import type { CommandRecorder } from "../../../../manager/CommandManager";
 import { AddValueCommand } from "../../../../editor/command/primitiveCommand/AddValue";
-export class AddEdgeTool extends Tool {
-  public override update(editor: AnimaEditor, _view: UIComponent_View): void {
+import { SelectionDragTool } from "./SelectionDragTool";
+export class AddEdgeTool extends SelectionDragTool {
+  public override readonly id = "AddEdge";
+  public override readonly label = "辺追加";
+  public override readonly icon = "addEdge";
+  protected start(editor: AnimaEditor, _view: UIComponent_View, recorder: CommandRecorder): void {
     const model = editor.editorState.activeObject;
-    if (!editor.getManager(InputManager)?.getKeyDown("Mouse0") || !(model instanceof Model_Sprite)) return;
+    if (!(model instanceof Model_Sprite)) return;
     const state = editor.editorState.getModelStateByID(model.id);
     if (!(state instanceof SpriteState)) return;
     const ids = [...new Set(state.selectedVertexIDs)].filter(id => Boolean(model.vertices[id]));
@@ -21,15 +24,11 @@ export class AddEdgeTool extends Tool {
         additions.push([crypto.randomUUID(), Model_Sprite.createEdge({ vertices: [a, b] })]);
     }
     if (!additions.length) return;
-    const manager = editor.getManager(CommandManager);
-    if (!manager || manager.commandRecorder) return;
-    const recorder = manager.setCommandRecorder("Add edges");
-    if (!recorder) return;
     for (const [edgeID, edge] of additions) {
       recorder.setCommand(AddValueCommand, { model, path: "edges", newKey: edgeID, newValue: edge });
-      if (!recorder.command) { manager.cancelCommandRecorder(); return; }
+      if (!recorder.command) return;
       recorder.commitCommand();
     }
-    manager.commitCommandRecorder();
   }
+  protected move(_editor: AnimaEditor, _view: UIComponent_View, _input: InputManager, _recorder: CommandRecorder): void {}
 }

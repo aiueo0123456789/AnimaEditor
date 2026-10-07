@@ -5,9 +5,9 @@ import { simpleWebGPU } from "../../../util/simpleWebGPU";
 import { SpaceData } from "../UI";
 import { View_ArmatureRenderData } from "./renderData/ArmatureRenderData";
 import { View_SpriteRenderData } from "./renderData/SpriteRenderData";
-import { AddArmatureTool } from "./tool/AddArmatureTool";
 import { AddBoneTool } from "./tool/AddBoneTool";
 import { AddEdgeTool } from "./tool/AddEdgeTool";
+import { GenerateSilhouetteTool } from "./tool/GenerateSilhouetteTool";
 import { AddVertexTool } from "./tool/AddVertexTool";
 import { DeleteBoneTool } from "./tool/DeleteBoneTool";
 import { DeleteEdgeTool } from "./tool/DeleteEdgeTool";
@@ -16,12 +16,12 @@ import { ObjectSelectTool } from "./tool/ObjectSelectTool";
 import { RotationTool } from "./tool/RotationTool";
 import { ScaleTool } from "./tool/ScaleTool";
 import { SelectTool } from "./tool/SelectTool";
-import { Tool } from "./tool/Tool";
 import { TranslateTool } from "./tool/TranslateTool";
 import { WeightPaintTool } from "./tool/WeightPaintTool";
 import { InsertKeyframeTool } from "./tool/InsertKeyframeTool";
 import { ViewEditModes } from "../../../editor/editorState/ViewEditModes";
 import type { ViewGeometrySource } from "./ViewGeometry";
+import { ToolManager } from "./tool/ToolManager";
 
 export class GizumoRenderData {
   public settingBuffer: GPUBuffer;
@@ -42,9 +42,7 @@ export class GizumoRenderData {
 type ViewRenderDatas = View_SpriteRenderData | View_ArmatureRenderData;
 
 export class UIComponent_View_SpaceData {
-  public showReferenceGeometry = false;
-  public currentTool = "objectSelect";
-  public tools: Tool[] = [
+  public readonly toolManager = new ToolManager([
     new ObjectSelectTool(),
     new SelectTool(),
     new TranslateTool(),
@@ -53,19 +51,19 @@ export class UIComponent_View_SpaceData {
     new AddVertexTool(),
     new DeleteVertexTool(),
     new AddEdgeTool(),
+    new GenerateSilhouetteTool(),
     new DeleteEdgeTool(),
     new AddBoneTool(),
     new DeleteBoneTool(),
-    new AddArmatureTool(),
     new WeightPaintTool(),
     new InsertKeyframeTool(),
-  ];
-  public modeToToolMap: Record<ViewEditModes, typeof Tool[]> = {
-    [ViewEditModes.OBJECT]: [ObjectSelectTool, AddArmatureTool],
-    [ViewEditModes.VERTEX]: [SelectTool, TranslateTool, RotationTool, ScaleTool, AddVertexTool, DeleteVertexTool, AddEdgeTool, DeleteEdgeTool],
-    [ViewEditModes.WEIGHTPAINT]: [SelectTool, WeightPaintTool],
-    [ViewEditModes.BONE]: [SelectTool, TranslateTool, RotationTool, ScaleTool, AddBoneTool, DeleteBoneTool],
-    [ViewEditModes.BONEANIMATION]: [SelectTool, TranslateTool, RotationTool, ScaleTool, InsertKeyframeTool],
+  ]);
+  public modeToToolMap: Record<ViewEditModes, string[]> = {
+    [ViewEditModes.OBJECT]: ["objectSelect"],
+    [ViewEditModes.VERTEX]: ["select", "translate", "rotation", "scale", "addVertex", "DeleteVertex", "AddEdge", "DeleteEdge", "GenerateSilhouette"],
+    [ViewEditModes.WEIGHTPAINT]: ["select", "WeightPaint"],
+    [ViewEditModes.BONE]: ["select", "translate", "rotation", "scale", "AddBone", "DeleteBone"],
+    [ViewEditModes.BONEANIMATION]: ["select", "translate", "rotation", "scale", "InsertKeyframe"],
     [ViewEditModes.ERROR]: [],
   };
   public renderData: View_SpaceData_RenderData = new View_SpaceData_RenderData();

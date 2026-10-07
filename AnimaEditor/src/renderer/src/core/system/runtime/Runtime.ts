@@ -1,7 +1,9 @@
 import { AnimaEditor } from "../../../editor/Editor";
+import { MaskReference } from "../../project/configModel/Scene";
 import { ModelReference } from "../../project/Model";
 import { AnimationReference } from "../../project/model/Animation";
 import { BoneReference } from "../../project/model/Armature";
+import { Runtime_SceneConfig } from "../../projectCache/configRuntime/Scene";
 import { Runtime_Animation } from "../../projectCache/runtime/Animation";
 import { Runtime_Armature } from "../../projectCache/runtime/Armature";
 import { System } from "../System";
@@ -14,10 +16,25 @@ export class Runtime_AnimationReference {
     this.trackMap = trackMap;
   }
 }
+
+export class Runtime_MaskReference {
+  public mask: Runtime_SceneConfig.Mask | null;
+  constructor(mask: Runtime_SceneConfig.Mask | null) {
+    this.mask = mask;
+  }
+}
+
 export class System_Runtime_ReferencesResolver {
   private editor: AnimaEditor;
   constructor(editor: AnimaEditor) {
     this.editor = editor;
+  }
+
+  mask(maskReference: MaskReference): Runtime_MaskReference {
+    const sceneConfig = this.editor.projectCache.sceneConfig;
+    const maskIndex = sceneConfig.maskIDMap.get(maskReference.maskID);
+    if (typeof maskIndex === "number") return new Runtime_MaskReference(sceneConfig.masks[maskIndex]);
+    return new Runtime_MaskReference(null);
   }
 
   animation(animationReference: AnimationReference): Runtime_AnimationReference {
@@ -30,7 +47,7 @@ export class System_Runtime_ReferencesResolver {
       }));
       return new Runtime_AnimationReference(animation, tracks);
     }
-    else return new Runtime_AnimationReference(null, {});
+    return new Runtime_AnimationReference(null, {});
   }
 
   bone(boneReference: BoneReference) {

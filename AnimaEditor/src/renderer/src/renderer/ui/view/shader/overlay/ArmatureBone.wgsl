@@ -18,6 +18,7 @@ struct Setting {
 @bind(<uniform> camera: ViewCamera);
 @bind(<storage, read> bones: array<Bone>);
 @bind(<uniform> setting: Setting);
+@bind(<storage, read> colors: array<vec4<f32>>);
 
 struct VInput {
   @builtin(instance_index) instanceIndex: u32,
@@ -26,6 +27,7 @@ struct VInput {
 
 struct VOutput {
   @builtin(position) position: vec4<f32>,
+  @location(0) color: vec4<f32>,
 }
 
 fn rotate2d(v: vec2<f32>, angle: f32) -> vec2<f32> {
@@ -47,11 +49,13 @@ fn vmain(input: VInput) -> VOutput {
 
   var out: VOutput;
   out.position = vec4<f32>((camera.vpM * vec3<f32>(local, 1.0)).xy, 0.0, 1.0);
+  out.color = colors[input.instanceIndex] * setting.color;
   return out;
 }
 
 struct FInput {
   @builtin(position) position: vec4<f32>,
+  @location(0) color: vec4<f32>,
 }
 
 struct FOutput {
@@ -61,6 +65,6 @@ struct FOutput {
 @fragment
 fn fmain(input : FInput) -> FOutput {
   var output : FOutput;
-  output.color = setting.color;
+  output.color = input.color;
   return output;
 }

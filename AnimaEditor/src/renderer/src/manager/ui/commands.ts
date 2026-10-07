@@ -7,12 +7,27 @@ import type { PropertyRoot } from "../../editor/command/PropertyRoot";
 import type { Models } from "../../core/project/Project";
 import { SetActiveObjectCommand } from "../../editor/command/interactionCommand/SetActiveObjectCommand";
 import { SetPropertiesCommand, type PropertyEdit } from "../../editor/command/interactionCommand/SetPropertiesCommand";
+import { SetSelectionCommand } from "../../editor/command/interactionCommand/SetSelectionCommand";
+import { Model_Animation } from "../../core/project/model/Animation";
+import { Model_Texture } from "../../core/project/model/Texture";
+import type { Model_Armature } from "../../core/project/model/Armature";
+import type { Model_Sprite } from "../../core/project/model/Sprite";
 
-export function commitUIActiveObject(manager: CommandManager, newActiveObject: Models | null): void {
+export function commitUIActiveObject(manager: CommandManager, newActiveObject: Model_Armature | Model_Sprite | null, additive = false): void {
   if (manager.commandRecorder) return;
   const recorder = manager.setCommandRecorder("Select object");
   if (!recorder) return;
-  recorder.setCommand(SetActiveObjectCommand, { newActiveObject });
+  recorder.setCommand(SetActiveObjectCommand, { newActiveObject, additive });
+  if (!recorder.command) { manager.cancelCommandRecorder(); return; }
+  recorder.commitCommand();
+  manager.commitCommandRecorder();
+}
+
+export function commitUISelection(manager: CommandManager, model: Models, additive = false): void {
+  if (manager.commandRecorder) return;
+  const recorder = manager.setCommandRecorder("Select model");
+  if (!recorder) return;
+  recorder.setCommand(SetSelectionCommand, { domain: model instanceof Model_Animation ? "animations" : model instanceof Model_Texture ? "textures" : "objects", id: model.id, additive });
   if (!recorder.command) { manager.cancelCommandRecorder(); return; }
   recorder.commitCommand();
   manager.commitCommandRecorder();

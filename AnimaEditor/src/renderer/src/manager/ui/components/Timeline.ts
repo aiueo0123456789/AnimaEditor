@@ -1,6 +1,7 @@
 import { defineWidget } from "./Widget";
 import type { WidgetDefinition, WidgetProps } from "./Widget";
 import type { Value } from "./Binding";
+import type { ContextMenuSource } from "../ContextMenuManager";
 
 export type TimelineKind = "armature" | "sprite" | "other";
 export interface TimelineGroup {
@@ -19,6 +20,7 @@ export interface TimelineTrack {
   readonly keyframes: readonly { id: string; frame: number; selected: boolean }[];
 }
 export interface TimelineData {
+  readonly selectedRowIDs?: readonly string[];
   readonly groups?: readonly TimelineGroup[];
   readonly frameStart: number;
   readonly frameEnd: number;
@@ -33,6 +35,9 @@ export interface TimelineViewState {
   collapsedPaths?: string[];
 }
 export interface TimelineProps extends WidgetProps {
+  readonly onSelectRow?: (rowID: string, additive: boolean) => void;
+  readonly hierarchyContextMenu?: ContextMenuSource;
+  readonly keyframesContextMenu?: ContextMenuSource;
   readonly viewState?: TimelineViewState;
   readonly data: Value<TimelineData>;
   readonly onPlay: (playing: boolean) => void;

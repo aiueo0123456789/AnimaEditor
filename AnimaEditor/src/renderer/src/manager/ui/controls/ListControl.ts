@@ -78,6 +78,19 @@ export function createListControl(props: ListProps) {
   }, { signal });
   render();
   return { element, childContainers,
+    captureViewState(): unknown {
+      return { height, scrollLeft: content.scrollLeft, scrollTop: content.scrollTop };
+    },
+    restoreViewState(state: unknown): void {
+      if (!state || typeof state !== "object") return;
+      const value = state as { height?: unknown; scrollLeft?: unknown; scrollTop?: unknown };
+      if (typeof value.height === "number" && Number.isFinite(value.height)) {
+        height = Math.max(min, Math.min(max, Math.round(value.height)));
+        render();
+      }
+      if (typeof value.scrollLeft === "number" && Number.isFinite(value.scrollLeft)) content.scrollLeft = value.scrollLeft;
+      if (typeof value.scrollTop === "number" && Number.isFinite(value.scrollTop)) content.scrollTop = value.scrollTop;
+    },
     dispose(): void { controller.abort(); finish(false); element.remove(); },
   };
 }

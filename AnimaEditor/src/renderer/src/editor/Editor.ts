@@ -8,6 +8,7 @@ import { Model_Armature, Model_ArmatureInput } from "../core/project/model/Armat
 import { System_Init_Sprite } from "../core/system/init/Sprite";
 import { System_Init_Armature } from "../core/system/init/Armature";
 import { System_Init_Animation } from "../core/system/init/Animation";
+import { System_Init_SceneConfig } from "../core/system/init/SceneConfig";
 import { System_Runtime } from "../core/system/runtime/Runtime";
 import { System_Animation } from "../core/system/animation/Animation";
 import { System_ApplyAnimation } from "../core/system/animation/ApplyAnimation";
@@ -70,9 +71,10 @@ export class AnimaEditor {
   public api: EditorAPI;
 
   constructor() {
-    this.project = new Project({ sceneConfig: {projectName: "初期プロジェクト"}, animationConfig: {frameStart: 0, frameEnd: 20, frameSpeed: 0.1}, models: [] });
+    this.project = new Project({ sceneConfig: {projectName: "初期プロジェクト", masks: {}}, animationConfig: {frameStart: 0, frameEnd: 20, frameSpeed: 0.1}, models: [] });
     this.projectCache = new ProjectCache(this.project);
     this.systems = [
+      new System_Init_SceneConfig(this),
       new System_Init_Texture(this),
       new System_Init_Sprite(this),
       new System_Init_Armature(this),

@@ -1,4 +1,7 @@
 import type { ButtonWidget } from "./Button";
+import type { ColorFieldWidget } from "./ColorField";
+import type { ContextMenuWidget } from "./ContextMenu";
+import type { SubmenuWidget } from "./Submenu";
 import type { ListWidget } from "./List";
 import type { CanvasWidget } from "./Canvas";
 import type { RenameButtonWidget } from "./RenameButton";
@@ -18,9 +21,12 @@ import type { Value } from "./Binding";
 import type { SectionWidget } from "./Section";
 import type { HierarchyWidget } from "./Hierarchy";
 import type { TimelineWidget } from "./Timeline";
+import type { ModalWidget } from "./Modal";
 import type { EditorEvent } from "../../EventManager";
+import type { ContextMenuSource } from "../ContextMenuManager";
 
 export interface WidgetProps {
+  readonly contextMenu?: ContextMenuSource;
   readonly observeEvents?: readonly EditorEvent[];
   // When present, an update replaces this subtree using the latest editor state.
   readonly rebuild?: () => Widget;
@@ -34,7 +40,7 @@ export interface WidgetDefinition<T extends string, P extends WidgetProps> {
   readonly props: Readonly<P>;
 }
 
-export type Widget = ListWidget | CanvasWidget | ButtonWidget | RenameButtonWidget | CheckboxWidget | ColumnWidget |
+export type Widget = ModalWidget | ColorFieldWidget | ContextMenuWidget | SubmenuWidget | ListWidget | CanvasWidget | ButtonWidget | RenameButtonWidget | CheckboxWidget | ColumnWidget |
   ContainerWidget | NumberFieldWidget | RowWidget | SelectWidget |
   SliderWidget | TextWidget | TextFieldWidget | SectionWidget | HierarchyWidget | TimelineWidget | SplitWidget | HeaderWidget | MainWidget;
 

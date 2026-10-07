@@ -8,7 +8,7 @@ import { Runtime_Armature, Runtime_Bone } from "./runtime/Armature";
 import { Runtime_Sprite } from "./runtime/Sprite";
 import { Model_Texture } from "../project/model/Texture";
 import { ID } from "../../editor/Editor";
-import { SceneConfigRuntime } from "./configRuntime/Scene";
+import { Runtime_SceneConfig } from "./configRuntime/Scene";
 import { Project } from "../project/Project";
 import { Model } from "../project/Model";
 
@@ -17,11 +17,11 @@ export type TypeofRuntimes = typeof Runtime_Sprite | typeof Runtime_Armature | t
 
 export class ProjectCache {
   public runtimes: Runtimes[];
-  public sceneConfig: SceneConfigRuntime;
+  public sceneConfig: Runtime_SceneConfig;
   constructor(project: Project) {
     this.runtimes = [];
 
-    this.sceneConfig = new SceneConfigRuntime(project.sceneConfig);
+    this.sceneConfig = new Runtime_SceneConfig(project.sceneConfig);
   }
 
   public addTexture(model: Model_Texture): Runtime_Texture {

@@ -9,11 +9,17 @@ import { createRenameButtonControl } from "./controls/RenameButtonControl";
 import { createSplitControl } from "./controls/SplitControl";
 import { configurePanelRegion } from "./controls/PanelRegion";
 import { createListControl } from "./controls/ListControl";
+import { createSubmenuControl } from "./controls/SubmenuControl";
+import { createModalControl } from "./controls/ModalControl";
+import { ContextMenuManager } from "./ContextMenuManager";
+import type { ContextMenuHost, ContextMenuSource } from "./ContextMenuManager";
 
 export interface MountedWidget {
   readonly element: HTMLElement;
   readonly childContainers?: readonly HTMLElement[];
   readonly observeEvents: readonly EditorEvent[];
+  captureViewState(): unknown;
+  restoreViewState(state: unknown): void;
   refresh(): void;
   dispose(): void;
 }
@@ -23,14 +29,25 @@ export interface DOMRendererOptions {
 }
 
 export class DOMRenderer {
+  private contextMenuHost?: ContextMenuHost;
+  public setContextMenuHost(host: ContextMenuHost): void { this.contextMenuHost = host; }
 
   constructor(private readonly options: DOMRendererOptions = {}) {}
 
   public mount(parent: HTMLElement, widget: Widget): MountedWidget {
     const cleanups: (() => void)[] = [];
+    const attachMenu = (element: HTMLElement, source?: ContextMenuSource): void => {
+      if (!source || !this.contextMenuHost) return;
+      const manager = new ContextMenuManager();
+      manager.menu = source;
+      manager.attach(element, this.contextMenuHost);
+      cleanups.push(() => manager.dispose());
+    };
     const listeners = new AbortController();
     let disposed = false;
     let childContainers: readonly HTMLElement[] | undefined;
+    let captureViewState: (() => unknown) | undefined;
+    let restoreViewState: ((state: unknown) => void) | undefined;
     const refreshers: (() => void)[] = [];
     const observeEvents: EditorEvent[] = [...(widget.props.observeEvents ?? [])];
     const watch = <T>(value: Value<T>, apply: (value: T) => void): (() => void) => {
@@ -52,10 +69,42 @@ export class DOMRenderer {
       const props = definition.props;
       let element: HTMLElement;
       switch (definition.type) {
+        case "modal": {
+          const control = createModalControl(definition.props);
+          cleanups.push(control.dispose);
+          childContainers = control.childContainers;
+          element = control.element;
+          break;
+        }
+        case "colorField": {
+          const p = definition.props;
+          const input = document.createElement("input");
+          input.type = "color";
+          watch(p.value, value => { input.value = value; });
+          watch(p.disabled ?? false, value => { input.disabled = value; });
+          on(input, "change", () => p.onChange(input.value));
+          element = labeled(p.label, input);
+          break;
+        }
+        case "contextMenu": {
+          element = document.createElement("section");
+          element.setAttribute("aria-label", definition.props.label ?? "Context menu");
+          element.style.gap = `${definition.props.gap ?? 2}px`;
+          break;
+        }
+        case "submenu": {
+          const control = createSubmenuControl(definition.props);
+          element = control.element;
+          childContainers = control.childContainers;
+          cleanups.push(control.dispose);
+          break;
+        }
         case "list": {
           const control = createListControl(definition.props);
           cleanups.push(() => control.dispose());
           childContainers = control.childContainers;
+          captureViewState = control.captureViewState;
+          restoreViewState = control.restoreViewState;
           element = control.element;
           break;
         }
@@ -78,6 +127,7 @@ export class DOMRenderer {
         case "split": {
           const control = createSplitControl(definition.props);
           cleanups.push(() => control.dispose());
+          attachMenu(control.separator, definition.props.resizerContextMenu);
           childContainers = control.childContainers;
           element = control.element;
           break;
@@ -85,7 +135,11 @@ export class DOMRenderer {
         case "timeline": {
           const control = createTimelineControl(definition.props);
           cleanups.push(() => control.dispose());
+          attachMenu(control.hierarchyElement, definition.props.hierarchyContextMenu);
+          attachMenu(control.keyframesElement, definition.props.keyframesContextMenu);
           watch(definition.props.data, control.setData);
+          captureViewState = control.captureViewState;
+          restoreViewState = control.restoreViewState;
           element = control.element;
           break;
         }
@@ -263,6 +317,7 @@ export class DOMRenderer {
     try {
       element = create(widget);
       parent.append(element);
+      attachMenu(element, widget.props.contextMenu);
       if (widget.type === "canvas") cleanups.push(widget.props.onMount(element as HTMLCanvasElement));
       if (widget.type === "container" && widget.props.onMount) cleanups.push(widget.props.onMount(element));
     } catch (error) {
@@ -271,10 +326,19 @@ export class DOMRenderer {
       cleanups.reverse().forEach(cleanup => cleanup());
       throw error;
     }
+    captureViewState ??= () => ({ scrollLeft: element.scrollLeft, scrollTop: element.scrollTop });
+    restoreViewState ??= state => {
+      if (!state || typeof state !== "object") return;
+      const value = state as { scrollLeft?: unknown; scrollTop?: unknown };
+      if (typeof value.scrollLeft === "number" && Number.isFinite(value.scrollLeft)) element.scrollLeft = value.scrollLeft;
+      if (typeof value.scrollTop === "number" && Number.isFinite(value.scrollTop)) element.scrollTop = value.scrollTop;
+    };
     const mounted: MountedWidget = {
       element,
       childContainers,
       observeEvents,
+      captureViewState,
+      restoreViewState,
       refresh: () => { if (!disposed) refreshers.forEach(refresh => refresh()); },
       dispose: () => {
         if (disposed) return;

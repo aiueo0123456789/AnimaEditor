@@ -1,42 +1,15 @@
 import { Models } from "../../core/project/Project";
 import type { AnimaEditor } from "../../editor/Editor";
 import { SetPropertyCommand, SetPropertyCommandInput } from "../../editor/command/primitiveCommand/SetProperty";
-import { SetActiveObjectCommand } from "../../editor/command/interactionCommand/SetActiveObjectCommand";
+import { commitUISelection } from "../../manager/ui/commands";
 import { JTag_CustomTag } from "../../library/JTag/tag/CustomTag";
 import { JTag_DBInput } from "../../library/JTag/tag/DBInput";
 import { CommandManager } from "../../manager/CommandManager";
 import { SourceContext } from "../../manager/context/contexts/SourceContext";
-import { Tool } from "./view/tool/Tool";
+import { ContextMenuManager } from "../../manager/ui/ContextMenuManager";
 
 export abstract class SpaceData {
   constructor() {}
-}
-
-export class ToolRender {
-  public id: string;
-  public icon: string;
-  public callTool: any;
-  constructor(id: string, icon: string, callTool: any) {
-    this.id = id;
-    this.icon = icon;
-    this.callTool = callTool;
-  }
-}
-
-export class ToolManager {
-  public activeTool: Tool | null;
-  constructor() {
-    this.activeTool = null;
-  }
-
-  /**
-   * ツールの起動
-   */
-  activate<T extends Tool>(ToolClass: new () => T): void {
-    this.activeTool?.deactivate();
-    this.activeTool = new ToolClass();
-    this.activeTool.activate();
-  }
 }
 
 export abstract class UIComponent {
@@ -50,7 +23,12 @@ export abstract class UIComponent {
     this.icon = data.icon;
   }
 
-  public abstract input(...args: unknown[]): void
+  public _input(editor: AnimaEditor): void {
+    if (ContextMenuManager.isOpen) return ;
+    this.input(editor);
+  }
+
+  public abstract input(editor: AnimaEditor): void
 
   public abstract update(...args: unknown[]): void
 }
@@ -64,11 +42,7 @@ export function setStopPropagation(tag: HTMLElement, event: string) {
 
 export function setActiveObjectOnClick(commandManager: CommandManager, clickTarget: JTag_CustomTag, newActiveObject: Models) {
   const onClick = () => {
-    const recorder = commandManager.setCommandRecorder();
-    if (!recorder) return;
-    recorder.setCommand(SetActiveObjectCommand, { newActiveObject });
-    recorder.commitCommand();
-    commandManager.commitCommandRecorder();
+    commitUISelection(commandManager, newActiveObject);
   };
   clickTarget.addEventListener("click", onClick);
 }

@@ -12,6 +12,12 @@ interface Entry {
   parent: Entry | null;
   children: Entry[];
 }
+interface PreservedViewState {
+  type: Widget["type"];
+  key: string | undefined;
+  value: unknown;
+  children: PreservedViewState[];
+}
 
 // Owned by UIManager. Public handles never expose DOM, callbacks, or child entries.
 export class WidgetTree {
@@ -19,7 +25,12 @@ export class WidgetTree {
   private readonly dirty = new Set<Entry>();
   private nextId = 0;
 
-  constructor(private readonly renderer = new DOMRenderer()) {}
+  constructor(private readonly renderer = new DOMRenderer()) {
+    renderer.setContextMenuHost({
+      mountWidget: (host, widget) => this.mount(host, widget),
+      disposeWidget: handle => this.dispose(handle),
+    });
+  }
 
   public mount(host: HTMLElement, widget: WidgetChild): WidgetHandle {
     return this.create(host, widget, null).handle;
@@ -29,7 +40,7 @@ export class WidgetTree {
     const entry: Entry = { handle, source, widget, mounted: this.renderer.mount(host, widget), parent, children: [] };
     this.entries.set(handle, entry);
     try {
-      const children = widget.type === "list" || widget.type === "row" || widget.type === "column" || widget.type === "section" || widget.type === "header" || widget.type === "main" ? widget.props.children
+      const children = widget.type === "modal" || widget.type === "contextMenu" || widget.type === "submenu" || widget.type === "list" || widget.type === "row" || widget.type === "column" || widget.type === "section" || widget.type === "header" || widget.type === "main" ? widget.props.children
         : widget.type === "split" ? [widget.props.first, widget.props.second]
         : widget.type === "container" && widget.props.child ? [widget.props.child] : [];
       children.forEach((child, index) => entry.children.push(this.create(entry.mounted.childContainers?.[index] ?? entry.mounted.element, child, entry)));
@@ -80,6 +91,7 @@ export class WidgetTree {
     const definition = typeof source === "function" ? source() : source;
     const host = entry.mounted.element.parentElement;
     if (!host) { this.destroy(entry); return; }
+    const viewState = this.captureViewState(entry);
     const marker = document.createComment("widget");
     host.insertBefore(marker, entry.mounted.element);
     const parent = entry.parent;
@@ -89,9 +101,31 @@ export class WidgetTree {
       const replacement = this.create(host, source, parent, handle, definition);
       host.insertBefore(replacement.mounted.element, marker);
       if (parent) parent.children.splice(index, 0, replacement);
+      this.restoreViewState(replacement, viewState);
     } finally {
       marker.remove();
     }
+  }
+
+  private captureViewState(entry: Entry): PreservedViewState {
+    return {
+      type: entry.widget.type,
+      key: entry.widget.props.key,
+      value: entry.mounted.captureViewState(),
+      children: entry.children.map(child => this.captureViewState(child)),
+    };
+  }
+
+  private restoreViewState(entry: Entry, state: PreservedViewState): void {
+    if (entry.widget.type !== state.type || entry.widget.props.key !== state.key) return;
+    entry.mounted.restoreViewState(state.value);
+    const keyed = new Map(state.children.filter(child => child.key !== undefined).map(child => [`${child.type}\0${child.key}`, child]));
+    entry.children.forEach((child, index) => {
+      const previous = child.widget.props.key === undefined
+        ? state.children[index]
+        : keyed.get(`${child.widget.type}\0${child.widget.props.key}`);
+      if (previous) this.restoreViewState(child, previous);
+    });
   }
 
   public dispose(handle: WidgetHandle): void {

@@ -3,6 +3,7 @@ import { SpriteState } from "../../../../editor/editorState/state/States/Sprite"
 import { simpleWebGPU } from "../../../../util/simpleWebGPU";
 import { View_ModelRenderData } from "./ModelRenderData";
 import type { ViewGeometrySource } from "../ViewGeometry";
+import { spriteMaskParams } from "./MaskRenderer";
 
 export class View_SpriteRenderData extends View_ModelRenderData {
   public selectedVertexCount = 0;
@@ -12,10 +13,11 @@ export class View_SpriteRenderData extends View_ModelRenderData {
   public edgeBuffer: GPUBuffer | null;
   public silhouetteEdgeBuffer: GPUBuffer | null;
   public weightBuffer: GPUBuffer | null;
+  public parmsBuffer: GPUBuffer = simpleWebGPU.createBuffer(4 * 4, ["U"]);
 
   public selectVertexBuffer: GPUBuffer | null;
 
-  public objectIDBuffer: GPUBuffer;
+  public objectIDBuffer: GPUBuffer = simpleWebGPU.createBuffer(4, ["U"]);
 
   constructor(numberID: number) {
     super(numberID);
@@ -27,8 +29,6 @@ export class View_SpriteRenderData extends View_ModelRenderData {
     this.weightBuffer = null;
 
     this.selectVertexBuffer = null;
-
-    this.objectIDBuffer = simpleWebGPU.createBuffer(4, ["U"]);
   }
 
   public update(sprite: Runtime_Sprite, spriteState: SpriteState, source: ViewGeometrySource = "runtime"): void {
@@ -71,6 +71,10 @@ export class View_SpriteRenderData extends View_ModelRenderData {
       this.indexBuffer = simpleWebGPU.createBuffer(Math.max(32, sprite.indicesNum * 3 * 4), ["I", "S"]);
     }
 
+    simpleWebGPU.writeBuffer(
+      this.parmsBuffer,
+      spriteMaskParams(sprite)
+    );
     simpleWebGPU.writeBuffer(
       this.objectIDBuffer,
       new Uint32Array([this.numberID])

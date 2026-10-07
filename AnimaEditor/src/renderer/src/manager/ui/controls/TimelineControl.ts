@@ -64,6 +64,7 @@ export function createTimelineControl(props: TimelineProps) {
   labels.className = "ui-timeline-labels";
   const labelContent = document.createElement("div");
   labelContent.setAttribute("role", "tree");
+  if (props.onSelectRow) labelContent.setAttribute("aria-multiselectable", "true");
   labelContent.setAttribute("aria-label", "Animation tracks");
   labels.append(labelContent);
   split.childContainers[0].append(labels);
@@ -204,6 +205,11 @@ export function createTimelineControl(props: TimelineProps) {
       label.setAttribute("role", "treeitem");
       label.setAttribute("aria-level", String(row.depth + 1));
       label.setAttribute("aria-label", row.label);
+      label.setAttribute("aria-selected", String(data.selectedRowIDs?.includes(row.id) ?? false));
+      const select = (event: MouseEvent | KeyboardEvent): void => {
+        props.onSelectRow?.(row.id, event.shiftKey || event.ctrlKey || event.metaKey);
+      };
+      label.addEventListener("click", select, { signal: trackSignal });
       label.tabIndex = -1;
       label.style.paddingLeft = `${8 + row.depth * 12}px`;
       const toggle = (): void => {
@@ -219,7 +225,8 @@ export function createTimelineControl(props: TimelineProps) {
         label.setAttribute("aria-expanded", String(!collapsed.has(row.id)));
         arrow.textContent = collapsed.has(row.id) ? "▸" : "▾";
         label.classList.add("is-branch");
-        label.addEventListener("click", toggle, { signal: trackSignal });
+        if (props.onSelectRow) arrow.addEventListener("click", event => { event.stopPropagation(); toggle(); }, { signal: trackSignal });
+        else label.addEventListener("click", toggle, { signal: trackSignal });
       }
       const caption = document.createElement("span");
       caption.className = "ui-timeline-row-caption";
@@ -240,7 +247,9 @@ export function createTimelineControl(props: TimelineProps) {
           else if (row.branch) next = rows[index + 1]?.id;
         } else if (event.key === "ArrowLeft") {
           if (row.branch && !collapsed.has(row.id)) toggle(); else next = row.parentID;
-        } else if ((event.key === "Enter" || event.key === " ") && row.branch) toggle();
+        } else if (event.key === "Enter" || event.key === " ") {
+          if (props.onSelectRow) select(event); else if (row.branch) toggle();
+        }
         else return;
         event.preventDefault(); event.stopPropagation();
         if (next) rowElements.get(next)?.focus();
@@ -319,7 +328,20 @@ export function createTimelineControl(props: TimelineProps) {
     scroll.scrollLeft *= zoom / previous;
   }, { signal, passive: false });
   return {
+    hierarchyElement: labels,
+    keyframesElement: scroll,
     element,
+    captureViewState(): unknown {
+      return { scrollLeft: scroll.scrollLeft, scrollTop: scroll.scrollTop };
+    },
+    restoreViewState(value: unknown): void {
+      if (!value || typeof value !== "object") return;
+      const state = value as { scrollLeft?: unknown; scrollTop?: unknown };
+      if (typeof state.scrollLeft === "number" && Number.isFinite(state.scrollLeft)) scroll.scrollLeft = state.scrollLeft;
+      if (typeof state.scrollTop === "number" && Number.isFinite(state.scrollTop)) scroll.scrollTop = state.scrollTop;
+      labels.scrollTop = scroll.scrollTop;
+      drawTicks();
+    },
     setData(value: TimelineData): void {
       data = value;
       visible.clear();
@@ -327,7 +349,7 @@ export function createTimelineControl(props: TimelineProps) {
       for (const [kind, input] of checkboxes) input.checked = visible.has(kind);
       zoom = Math.max(2, Math.min(64, state.zoom));
       split.setRatio(state.trackRatio);
-      const next = JSON.stringify([value.frameStart, value.frameEnd, value.tracks, value.groups, [...visible], zoom, state.collapsedPaths]);
+      const next = JSON.stringify([value.frameStart, value.frameEnd, value.tracks, value.groups, value.selectedRowIDs, [...visible], zoom, state.collapsedPaths]);
       if (next !== signature) { signature = next; drawTracks(); }
       else updateFrame();
     },

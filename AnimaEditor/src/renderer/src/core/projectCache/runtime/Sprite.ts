@@ -2,7 +2,7 @@
 import { ID } from "../../../editor/Editor";
 import { Vec2, Vec2Math, Vec3, Vec3Math } from "../../../util/vecMath";
 import { Model_Sprite } from "../../project/model/Sprite";
-import { Runtime_AnimationReference, System_Runtime_ReferencesResolver } from "../../system/runtime/Runtime";
+import { Runtime_AnimationReference, Runtime_MaskReference, System_Runtime_ReferencesResolver } from "../../system/runtime/Runtime";
 import { Runtime } from "../Runtime";
 import { Runtime_Bone } from "./Armature";
 import { Runtime_Texture } from "./Texture";
@@ -20,7 +20,14 @@ class BoneWeight {
 
 type Runtime_Edge = [number, number];
 
+enum MaskType {
+  Default = 0,
+  Reverse = 1,
+}
+
 export class Runtime_Sprite extends Runtime<Model_Sprite>  {
+  static MaskType = MaskType;
+
   static createIndex(): Vec3 {
     return Vec3Math.create();
   }
@@ -56,6 +63,11 @@ export class Runtime_Sprite extends Runtime<Model_Sprite>  {
   public silhouetteEdgeIDMap: Map<ID, number> = new Map();
   public boneWeightIDMap: Map<ID, number> = new Map();
 
+  public maskTarget: Runtime_MaskReference[] = [];
+  public maskSource = new Runtime_MaskReference(null);
+  public alpha: number = 1;
+  public maskType: MaskType = MaskType.Default;
+
   public override model: Model_Sprite;
 
   constructor(model: Model_Sprite) {
@@ -80,10 +92,11 @@ export class Runtime_Sprite extends Runtime<Model_Sprite>  {
   }
 
   getAnimationTarget(): string[] {
-    return Object.keys(this.model.vertices).flatMap(id => [`vertices.${id}.0`, `vertices.${id}.1`]);
+    return ["alpha", ...Object.keys(this.model.vertices).flatMap(id => [`vertices.${id}.0`, `vertices.${id}.1`])];
   }
 
   getAnimationValue(path: string): number | undefined {
+    if (path === "alpha") return this.alpha;
     const parts = path.split(".");
     if (parts.length !== 3 || parts[0] !== "vertices" || (parts[2] !== "0" && parts[2] !== "1")) return undefined;
     const index = this.vertexIDMap.get(parts[1]);
@@ -91,9 +104,14 @@ export class Runtime_Sprite extends Runtime<Model_Sprite>  {
   }
 
   setAnimation(): void {
+    this.alpha = Number.isFinite(this.model.alpha) ? Math.max(0, Math.min(1, this.model.alpha)) : 1;
     // Init restores the base mesh each frame, so vertex channels must also apply each frame.
     for (const [path, track] of Object.entries(this.animation.trackMap)) {
       if (track?.value === undefined || !Number.isFinite(track.value)) continue;
+      if (path === "alpha") {
+        this.alpha = Math.max(0, Math.min(1, track.value));
+        continue;
+      }
       const parts = path.split(".");
       if (parts.length !== 3 || parts[0] !== "vertices" || (parts[2] !== "0" && parts[2] !== "1")) continue;
       const index = this.vertexIDMap.get(parts[1]);
@@ -102,6 +120,9 @@ export class Runtime_Sprite extends Runtime<Model_Sprite>  {
   }
 
   resolveReferences(referencesResolver: System_Runtime_ReferencesResolver): void {
+    this.maskType = this.model.maskType;
+    this.maskTarget = this.model.maskTarget.map(reference => referencesResolver.mask(reference));
+    this.maskSource = referencesResolver.mask(this.model.maskSource);
     this.animation = referencesResolver.animation(this.model.animation);
     Object.entries(this.model.boneWeights).forEach(([boneWeightID, modelBoneWeight]) => {
       const runtimeBoneWeightIndex = this.boneWeightIDMap.get(boneWeightID);
@@ -110,6 +131,6 @@ export class Runtime_Sprite extends Runtime<Model_Sprite>  {
       runtimeBoneWeight.bone = referencesResolver.bone(modelBoneWeight.boneID);
     })
     const newTexture = referencesResolver.model(this.model.texture);
-    if (newTexture instanceof Runtime_Texture) this.texture = newTexture;
+    this.texture = newTexture instanceof Runtime_Texture ? newTexture : null;
   }
 }

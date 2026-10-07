@@ -12,9 +12,9 @@ export interface HierarchyItem {
 export interface HierarchyProps extends WidgetProps {
   readonly label: string;
   readonly items: Value<readonly HierarchyItem[]>;
-  readonly selected: Value<string | null>;
+  readonly selected: Value<string | null | readonly string[]>;
   readonly filter?: Value<string>;
-  readonly onSelect: (id: string) => void;
+  readonly onSelect: (id: string, additive: boolean) => void;
   readonly onRename?: (id: string, name: string) => void;
 }
 export type HierarchyWidget = WidgetDefinition<"hierarchy", HierarchyProps>;

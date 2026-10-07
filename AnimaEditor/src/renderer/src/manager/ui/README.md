@@ -13,9 +13,11 @@ Parent refreshes propagate to all children regardless of their own conditions.
 Normal refresh reads bindings into existing DOM, preserving active input drafts.
 Use rebuild: () => Widget for structural changes: an update then disposes the
 subtree and installs the returned definition. Return observeEvents and rebuild
-again for future updates (a named factory can refer to itself). This is a full
-reset, not keyed reconciliation: focus and local input state are discarded and
-active edit sessions are cancelled. New descendants are initialized once.
+again for future updates (a named factory can refer to itself). Focus and input
+drafts are discarded and active edit sessions are cancelled. Scroll positions
+and resizable List heights are restored for widgets with the same type and key;
+unkeyed widgets match by their structural position. New descendants are
+initialized once.
 
 UIManager.mountWidget(parent, widget) returns an opaque handle containing no
 element references. UIManager.invalidateWidget(handle) schedules a refresh.
@@ -42,7 +44,37 @@ Item refresh preserves expansion and selection; resetting the widget does not.
 Select renders a custom combobox/listbox, not native select/option elements.
 Arrow keys, Home/End, and typeahead move the active option; Enter commits and
 Escape cancels. Disabled options are skipped. Tab/outside click closes the
-popup. Popups are attached to document.body and removed on close/dispose.
+popup. Popups are attached to document.body (or their owning context menu)
+and removed on close/dispose.
+
+## Context Menus
+
+Every widget accepts contextMenu, either a ContextMenu definition or a builder
+receiving the MouseEvent. The closest configured child wins over its ancestors.
+A builder returning null suppresses ancestor menus and leaves the native menu.
+The renderer owns each manager and disposes it with the widget.
+
+```ts
+Section({ title: "Objects", children: [],
+  contextMenu: event => ContextMenu({ children: [
+    Button({ label: "Delete", onPress: () => deleteSelection() }),
+    Submenu({ label: "Transform", children: [
+      Button({ label: "Reset", onPress: () => resetTransform() }),
+    ] }),
+  ] }),
+});
+```
+
+ContextMenu and Submenu accept ordinary WidgetChild children, including builders,
+sections and inputs. Button actions dismiss the menu; inputs and Select do not.
+Submenus open on hover/click or ArrowRight, and close with ArrowLeft/Escape.
+Outside pointer/focus, Escape, window blur/resize, panel scrolling and disposal
+dismiss the root menu. Only one manager can display a menu at a time.
+Timeline also accepts hierarchyContextMenu and keyframesContextMenu for the
+left tree and right frame area respectively. These override its contextMenu.
+Builders can inspect event.target to determine the clicked row/keyframe.
+Menu widgets are mounted through UIManager, so events, subtree rebuilding and
+recursive cleanup use the same lifecycle as other widgets.
 
 Styles are in assets/widgets.css and loaded after the legacy JTag styles.
 For an isolated browser preview run Vite from the repository root and open

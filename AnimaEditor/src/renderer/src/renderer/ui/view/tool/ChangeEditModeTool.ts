@@ -11,6 +11,9 @@ import { Runtime_Sprite } from "../../../../core/projectCache/runtime/Sprite";
 import { geometrySource, spritePoints } from "../ViewGeometry";
 
 export class ChangeEditModeTool extends DragTool {
+  public override readonly id = "changeEditMode";
+  public override readonly label = "編集モード変更";
+  public override readonly icon = "select";
   private deltas: Record<string, number> = {};
   private weightID = "";
   protected start(editor: AnimaEditor, _view: UIComponent_View, recorder: CommandRecorder): void {

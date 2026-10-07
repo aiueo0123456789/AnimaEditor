@@ -11,6 +11,7 @@ struct Setting {
 @bind(<uniform> camera: ViewCamera);
 @bind(<storage, read> vertices: array<vec2<f32>>);
 @bind(<uniform> setting: Setting);
+@bind(<storage, read> colors: array<vec4<f32>>);
 
 struct VInput {
   @builtin(instance_index) instanceIndex: u32,
@@ -20,6 +21,7 @@ struct VInput {
 struct VOutput {
   @builtin(position) position: vec4<f32>,
   @location(0) texCoord: vec2<f32>, // -1 ~ 1
+  @location(1) color: vec4<f32>,
 }
 
 const pointData = array<vec2<f32>, 6>(
@@ -44,11 +46,13 @@ fn vmain(input: VInput) -> VOutput {
   let offset = point * radius * camera.pixelToNDC;
   output.position = vec4<f32>(clipCenter.xy + offset, clipCenter.z, 1.0);
   output.texCoord = point * 0.5 + 0.5;
+  output.color = colors[input.instanceIndex] * setting.color;
   return output;
 }
 
 struct FInput {
   @location(0) texCoord: vec2<f32>,
+  @location(1) color: vec4<f32>,
 }
 
 struct FOutput {
@@ -62,6 +66,6 @@ fn fmain(input : FInput) -> FOutput {
   if (1.0 < dist) {
     discard ;
   }
-  output.color = setting.color;
+  output.color = input.color;
   return output;
 }

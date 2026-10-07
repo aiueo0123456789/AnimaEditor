@@ -4,6 +4,7 @@ import { Vec2, Vec2Math } from "../../../util/vecMath";
 import { Model, ModelInput, ModelReference, ModelReferenceInput } from "../Model";
 import { BoneReference, BoneReferenceInput } from "./Armature";
 import { AnimationReference, type AnimationReferenceInput } from "./Animation";
+import { MaskReference, MaskReferenceInput } from "../configModel/Scene";
 
 interface BBox {
   min: Vec2,
@@ -40,6 +41,7 @@ interface EdgeInput {
 }
 
 export interface Model_SpriteInput extends ModelInput {
+  alpha?: number;
   animation?: AnimationReferenceInput;
   texture: ModelReferenceInput,
   textureRect?: BBox,
@@ -48,6 +50,9 @@ export interface Model_SpriteInput extends ModelInput {
   edges?: Record<EdgeID, EdgeInput>,
   boneWeights?: Record<BoneWeightID, BoneWeightInput>,
   zIndex: number;
+  maskTarget?: MaskReferenceInput[] | MaskReferenceInput;
+  maskSource?: MaskReferenceInput;
+  maskType?: 0 | 1;
 }
 
 class Vertex {
@@ -86,6 +91,10 @@ export class Model_Sprite extends Model {
   public boneWeights: Record<BoneWeightID, BoneWeight>;
   public center: Vec2; // テクスチャの中心
   public zIndex: number;
+  public alpha: number;
+  public maskTarget: MaskReference[];
+  public maskSource: MaskReference;
+  public maskType: 0 | 1;
 
   constructor(data: Model_SpriteInput) {
     super(data);
@@ -100,12 +109,19 @@ export class Model_Sprite extends Model {
     this.center = Vec2Math.create();
 
     this.zIndex = data.zIndex ?? 0;
+    this.alpha = Number.isFinite(data.alpha) ? Math.max(0, Math.min(1, data.alpha!)) : 1;
 
     this.vertices = Object.fromEntries(Object.entries(data.vertices ?? {}).map(([id, vertex]) => [id, Model_Sprite.createVertex(vertex)]));
     this.silhouetteEdges = Object.fromEntries(Object.entries(data.silhouetteEdges ?? {}).map(([edgeID, edge]) => [edgeID, Model_Sprite.createEdge(edge)]));
     this.edges = Object.fromEntries(Object.entries(data.edges ?? {}).map(([edgeID, edge]) => [edgeID, Model_Sprite.createEdge(edge)]));
 
     this.boneWeights = Object.fromEntries(Object.entries(data.boneWeights ?? {}).map(([boneWeightID, boneWeight]) => [boneWeightID, Model_Sprite.createBoneWeight(boneWeight)]));
+
+    // Accept saved projects using the former single-reference representation.
+    const maskTargets = Array.isArray(data.maskTarget) ? data.maskTarget : data.maskTarget?.maskID ? [data.maskTarget] : [];
+    this.maskTarget = maskTargets.map(reference => new MaskReference(reference));
+    this.maskSource = data.maskSource ? new MaskReference(data.maskSource) : new MaskReference({maskID: ""});
+    this.maskType = data.maskType === 1 ? 1 : 0;
   }
 
   get verticesNum() {

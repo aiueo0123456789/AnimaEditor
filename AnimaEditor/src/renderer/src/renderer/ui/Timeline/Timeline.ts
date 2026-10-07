@@ -5,12 +5,12 @@ import type { AnimaEditor } from "../../../editor/Editor";
 import { AnimationState } from "../../../editor/editorState/state/States/Animation";
 import { UIManager } from "../../../manager/ui/UIManager";
 import type { WidgetHandle } from "../../../manager/ui/WidgetTree";
-import { bind, Timeline } from "../../../manager/ui/components";
-import type { TimelineData, TimelineKind } from "../../../manager/ui/components";
+import { bind, Button, Submenu, Timeline } from "../../../manager/ui/components";
+import type { ContextMenuWidget, TimelineData, TimelineKind, Widget } from "../../../manager/ui/components";
 import { UIComponent } from "../UI";
 import { UIComponent_Timeline_SpaceData } from "./SpaceData";
 import { CommandManager } from "../../../manager/CommandManager";
-import { commitUIProperties } from "../../../manager/ui/commands";
+import { commitUIProperties, commitUISelection } from "../../../manager/ui/commands";
 import type { PropertyEdit } from "../../../editor/command/interactionCommand/SetPropertiesCommand";
 
 export class UIComponent_Timeline extends UIComponent {
@@ -38,6 +38,13 @@ export class UIComponent_Timeline extends UIComponent {
       return { id: animation.id, label: animation.name, kind: kinds[0], kinds };
     });
     return {
+      selectedRowIDs: animations.flatMap(animation => {
+        if (!editor.editorState.animations.selectedAnimationsID.includes(animation.id)) return [];
+        const state = editor.editorState.getModelStateByID(animation.id);
+        const rows = [JSON.stringify(["group", animation.id])];
+        if (state instanceof AnimationState && animation.tracks[state.activeTrackID]) rows.push(JSON.stringify(["track", JSON.stringify([animation.id, state.activeTrackID])]));
+        return rows;
+      }),
       groups,
       frameStart: config.frameStart, frameEnd: config.frameEnd,
       currentFrame: runtime.currentFrame, playing: runtime.isPlay,
@@ -61,9 +68,69 @@ export class UIComponent_Timeline extends UIComponent {
     if (!ui) return;
     if (this.host !== parent || !this.handle) {
       this.dispose(editor);
+      const contextMenu = (children: readonly Widget[]): ContextMenuWidget => ui.panelContextMenu(this, children);
       this.handle = ui.mountWidget(parent, Timeline({
         viewState: this.spaceData,
+        hierarchyContextMenu: () => contextMenu([
+            Submenu({
+              label: "アニメーション",
+              children: [
+                Button({
+                  label: "追加",
+                  onPress: () => {}
+                }),
+                Button({
+                  label: "削除",
+                  onPress: () => {}
+                }),
+              ]
+            }),
+            Submenu({
+              label: "トラック",
+              children: [
+                Button({
+                  label: "追加",
+                  onPress: () => {}
+                }),
+                Button({
+                  label: "削除",
+                  onPress: () => {}
+                }),
+              ]
+            })
+          ]),
+        keyframesContextMenu: () => contextMenu([
+            Submenu({
+              label: "キーフレーム",
+              children: [
+                Button({
+                  label: "追加",
+                  onPress: () => {}
+                }),
+                Button({
+                  label: "削除",
+                  onPress: () => {}
+                }),
+              ]
+            }),
+          ]),
         data: bind({ read: () => this.readData(editor) }),
+        onSelectRow: (rowID, additive) => {
+          const [kind, id] = JSON.parse(rowID) as [string, string];
+          const [animationID, trackID] = kind === "track" ? JSON.parse(id) as [string, string] : [id, null];
+          const animation = editor.project.getModelByID(animationID);
+          const commands = editor.getManager(CommandManager);
+          if (!(animation instanceof Model_Animation) || !commands || commands.commandRecorder) return;
+          if (!trackID) { commitUISelection(commands, animation, additive); return; }
+          const state = editor.editorState.getModelStateByID(animationID);
+          if (!(state instanceof AnimationState) || !animation.tracks[trackID]) return;
+          commitUIProperties(commands, "Select track", [
+            { model: editor.editorState, path: "animations.activeAnimationID", value: animationID },
+            { model: editor.editorState, path: "animations.selectedAnimationsID", value: additive ? [...new Set([...editor.editorState.animations.selectedAnimationsID, animationID])] : [animationID] },
+            { model: editor.editorState, path: "inspectorDomain", value: "animations" },
+            { model: state, path: "activeTrackID", value: trackID },
+          ]);
+        },
         onPlay: playing => editor.api.setProperty(editor.projectCache, "sceneConfig.isPlay", playing),
         onSeek: frame => {
           editor.api.setProperty(editor.projectCache, "sceneConfig.isPlay", false);
@@ -76,10 +143,16 @@ export class UIComponent_Timeline extends UIComponent {
           const target = animations.find(animation => Object.entries(animation.tracks).some(([id, track]) =>
             JSON.stringify([animation.id, id]) === trackID && track.keyframes.some(key => key.id === keyframeID)));
           if (!target) return;
-          const edits: PropertyEdit[] = [];
+          const targetTrackID = Object.keys(target.tracks).find(id => JSON.stringify([target.id, id]) === trackID)!;
+          const edits: PropertyEdit[] = [
+            { model: editor.editorState, path: "animations.activeAnimationID", value: target.id },
+            { model: editor.editorState, path: "animations.selectedAnimationsID", value: additive ? [...new Set([...editor.editorState.animations.selectedAnimationsID, target.id])] : [target.id] },
+            { model: editor.editorState, path: "inspectorDomain", value: "animations" },
+          ];
           for (const animation of animations) {
             const state = editor.editorState.getModelStateByID(animation.id);
             if (!(state instanceof AnimationState)) continue;
+            if (animation === target) edits.push({ model: state, path: "activeTrackID", value: targetTrackID });
             const validKeys = new Set(Object.values(animation.tracks).flatMap(track => track.keyframes.map(key => key.id)));
             let ids = additive ? [...new Set(state.selectKeyframeIDs)].filter(id => validKeys.has(id)) : [];
             if (animation === target) {

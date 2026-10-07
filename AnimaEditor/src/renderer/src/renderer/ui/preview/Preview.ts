@@ -2,7 +2,7 @@ import { Runtime_Sprite } from "../../../core/projectCache/runtime/Sprite";
 import { AnimaEditor } from "../../../editor/Editor";
 import { PipelineManager } from "../../../manager/PipelineManager";
 import { UIManager } from "../../../manager/ui/UIManager";
-import { Canvas, Column, Header, Main, Text } from "../../../manager/ui/components";
+import { Canvas, Column, Main } from "../../../manager/ui/components";
 import type { WidgetHandle } from "../../../manager/ui/WidgetTree";
 import { simpleWebGPU } from "../../../util/simpleWebGPU";
 import { UIComponent } from "../UI";
@@ -11,9 +11,11 @@ import { UIComponent_Preview_SpaceData } from "./SpaceData";
 import { InputManager } from "../../../manager/InputManager";
 import { Vec2, Vec2Math } from "../../../util/vecMath";
 import { CameraRenderData } from "../view/renderData/CameraRenderData";
+import { MaskRenderer, spriteMaskParams, type MaskGeometry } from "../view/renderData/MaskRenderer";
 
 // Preview owns only scene geometry, never selection or editing-overlay buffers.
 class PreviewSpriteData {
+  public parmsBuffer = simpleWebGPU.createBuffer(16, ["U"]);
   private buffers = new Map<string, GPUBuffer>();
 
   upload(key: string, values: Float32Array<ArrayBuffer> | Uint32Array<ArrayBuffer>, index = false): GPUBuffer {
@@ -29,6 +31,7 @@ class PreviewSpriteData {
   }
 
   dispose(): void {
+    this.parmsBuffer.destroy();
     for (const buffer of this.buffers.values()) buffer.destroy();
     this.buffers.clear();
   }
@@ -44,6 +47,7 @@ export class UIComponent_Preview extends UIComponent {
   private cameraData: CameraRenderData | null = null;
   private camera: View_Camera = new View_Camera();
   private readonly sprites = new Map<string, PreviewSpriteData>();
+  private masks = new MaskRenderer();
 
   constructor(public readonly spaceData = new UIComponent_Preview_SpaceData()) { super({ id: 0, name: "Preview", icon: "" }); }
 
@@ -90,7 +94,7 @@ export class UIComponent_Preview extends UIComponent {
     if (!input || !this.canvas) return;
     this.canvasBBox = this.canvas.getBoundingClientRect();
     if (!this.canvasBBox) return;
-    if (input.getKey("ControlLeft") || input.getKey("ControlRight")) {
+    if (input.getKey("AltLeft") || input.getKey("AltRight")) {
       this.camera.zoom = Math.max(.05, Math.min(100, this.camera.zoom * Math.exp(-input.mouseScrollDelta[1] * .01)));
     } else {
       Vec2Math.sub(this.camera.position, Vec2Math.mul(this.clientVecToWorldVec(input.mouseScrollDelta), [1, -1]), this.camera.position);
@@ -98,6 +102,7 @@ export class UIComponent_Preview extends UIComponent {
   }
 
   private release(): void {
+    this.masks.dispose();
     this.context?.unconfigure();
     this.context = null;
     this.canvas = null;
@@ -140,7 +145,6 @@ export class UIComponent_Preview extends UIComponent {
     if (this.host !== parent || !this.handle) {
       this.dispose(editor);
       this.handle = ui.mountWidget(parent, Column({ className: "ui-panel ui-preview", children: [
-        Header({ children: [Text({ text: "Preview" })] }),
         Main({ className: "ui-preview-main", padding: 0, overflow: "hidden", children: [
           Canvas({ className: "ui-preview-canvas", label: "Sprite preview", onMount: canvas => this.mountCanvas(canvas) }),
         ] }),
@@ -157,25 +161,39 @@ export class UIComponent_Preview extends UIComponent {
     if (!rect?.width || !rect.height || !this.context || !this.cameraData) return;
     this.cameraData.update(this.camera, rect.width, rect.height);
     const encoder = simpleWebGPU.device.createCommandEncoder();
+    const geometry = new Map<Runtime_Sprite, MaskGeometry>();
+    for (const sprite of sprites) {
+      if (!sprite.texture?.texture || !sprite.indicesNum) continue;
+      let data = this.sprites.get(sprite.id);
+      if (!data) this.sprites.set(sprite.id, data = new PreviewSpriteData());
+      geometry.set(sprite, {
+        vertices: data.upload("vertices", new Float32Array(sprite.vertices.flat())),
+        texcoords: data.upload("texcoords", new Float32Array(sprite.texcoords.flat())),
+        indices: data.upload("indices", new Uint32Array(sprite.indices.flat()), true), params: data.parmsBuffer,
+      });
+      simpleWebGPU.writeBuffer(data.parmsBuffer, spriteMaskParams(sprite));
+    }
+    const target = this.context.getCurrentTexture();
+    this.masks.render(encoder, editor.projectCache.sceneConfig.masks, sprites,
+      this.cameraData.cameraBuffer, target.width, target.height, sprite => geometry.get(sprite) ?? null);
     const pass = encoder.beginRenderPass({ colorAttachments: [{
-      view: this.context.getCurrentTexture().createView(),
+      view: target.createView(),
       clearValue: [1, 1, 1, 1], loadOp: "clear", storeOp: "store",
     }] });
     const pipeline = editor.getManager(PipelineManager)?.getPipelineByID("Scene-Sprite");
     if (pipeline) for (const sprite of [...sprites].sort((a, b) => a.zIndex - b.zIndex)) {
       if (!sprite.texture?.texture || !sprite.indicesNum) continue;
-      let data = this.sprites.get(sprite.id);
-      if (!data) this.sprites.set(sprite.id, data = new PreviewSpriteData());
-      const vertices = data.upload("vertices", new Float32Array(sprite.vertices.flat()));
-      const texcoords = data.upload("texcoords", new Float32Array(sprite.texcoords.flat()));
-      const indices = data.upload("indices", new Uint32Array(sprite.indices.flat()), true);
+      const data = geometry.get(sprite);
+      if (!data) continue;
+      const { vertices, texcoords, indices } = data;
       pass.setPipeline(pipeline.pipeline);
       for (const attribute of pipeline.vertexBuffers) {
         if (attribute.source === "VERTEX") pass.setVertexBuffer(attribute.location, vertices);
         if (attribute.source === "TEXCOORD") pass.setVertexBuffer(attribute.location, texcoords);
       }
       pass.setBindGroup(0, simpleWebGPU.createGroup(pipeline.groupLayout, [
-        this.cameraData.cameraBuffer, sprite.texture.texture, simpleWebGPU.sampler,
+        this.cameraData.cameraBuffer, data.params, sprite.texture.texture,
+        this.masks.textureFor(sprite), simpleWebGPU.sampler,
       ]));
       pass.setIndexBuffer(indices, "uint32");
       pass.drawIndexed(sprite.indicesNum * 3);

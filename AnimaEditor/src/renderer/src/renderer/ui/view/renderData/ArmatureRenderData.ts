@@ -10,6 +10,10 @@ export class View_ArmatureRenderData extends View_ModelRenderData {
   public selectedVertexCount = 0;
   public boneBuffer = simpleWebGPU.createBuffer(32, ["V", "S"]);
   public selectBoneBuffer = simpleWebGPU.createBuffer(32, ["V", "S"]);
+  public boneColorBuffer = simpleWebGPU.createBuffer(32, ["S"]);
+  public selectBoneColorBuffer = simpleWebGPU.createBuffer(32, ["S"]);
+  public boneVertexColorBuffer = simpleWebGPU.createBuffer(32, ["S"]);
+  public selectBoneVertexColorBuffer = simpleWebGPU.createBuffer(32, ["S"]);
   public boneVertexBuffer = simpleWebGPU.createBuffer(32, ["V", "S"]);
   public selectBoneVertexBuffer = simpleWebGPU.createBuffer(32, ["V", "S"]);
   public vertexBuffer: GPUBuffer;
@@ -46,6 +50,19 @@ export class View_ArmatureRenderData extends View_ModelRenderData {
     this.selectedVertexCount = selectedVertices.length;
     this.boneBuffer = this.upload(this.boneBuffer, bones.flatMap(bone => bone.packed));
     this.selectBoneBuffer = this.upload(this.selectBoneBuffer, selectedBones.flatMap(bone => bone.packed));
+    const color = (id: string): number[] => {
+      const group = armature.model.groups[armature.model.bones[id]?.groupID];
+      const fallback = [1, 0, 0, 1];
+      return fallback.map((value, index) => Number.isFinite(group?.color[index]) ? Math.max(0, Math.min(1, group.color[index])) : value);
+    };
+    this.boneColorBuffer = this.upload(this.boneColorBuffer, bones.flatMap(bone => color(bone.id)));
+    const selectedColor = (id: string): number[] => color(id).map((value, index) => index < 3 ? value * 0.55 + 0.45 : Math.max(value, 0.6));
+    this.selectBoneColorBuffer = this.upload(this.selectBoneColorBuffer, selectedBones.flatMap(bone => selectedColor(bone.id)));
+    this.boneVertexColorBuffer = this.upload(this.boneVertexColorBuffer, bones.flatMap(bone => [...color(bone.id), ...color(bone.id)]));
+    this.selectBoneVertexColorBuffer = this.upload(this.selectBoneVertexColorBuffer, bones.flatMap(bone => [
+      ...(heads.has(bone.id) ? selectedColor(bone.id) : []),
+      ...(tails.has(bone.id) ? selectedColor(bone.id) : []),
+    ]));
     this.boneVertexBuffer = this.upload(this.boneVertexBuffer, bones.flatMap(bone => [...bone.head, ...bone.tail]));
     this.selectBoneVertexBuffer = this.upload(this.selectBoneVertexBuffer, selectedVertices.flat());
     simpleWebGPU.writeBuffer(this.objectIDBuffer, new Uint32Array([this.numberID]));

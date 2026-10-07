@@ -10,6 +10,9 @@ import type { UIComponent_View } from "../View";
 import { Tool } from "./Tool";
 
 export class InsertKeyframeTool extends Tool {
+  public override readonly id = "InsertKeyframe";
+  public override readonly label = "キーフレーム挿入";
+  public override readonly icon = "insertKeyframe";
   public override update(editor: AnimaEditor, _view: UIComponent_View): void {
     if (!editor.getManager(InputManager)?.getKeyDown("Mouse0") || editor.editorState.editMode !== ViewEditModes.BONEANIMATION) return;
     const model = editor.editorState.activeObject;
